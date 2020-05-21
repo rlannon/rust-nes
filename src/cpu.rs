@@ -2,6 +2,14 @@
 // Implements the 6502 variant used in the NES
 
 mod cpu {
+    /// The stack page is hard-wired to page 1
+    const stack_page: u8 = 0x01;
+
+    /// The 6502 has 3 vectors located at the end of memory
+    const nmi_vector: u16 = 0xfffa;
+    const reset_vector: u16 = 0xfffc;
+    const irq_vector: u16 = 0xfffe;
+
     pub struct CPU {
         // processor registers
         status: u8,
@@ -13,14 +21,6 @@ mod cpu {
 
         // processor memory
         memory: [u8; 65536],
-        
-        // stack address
-        stack_page: u8,
-
-        // vector constants -- these take up two bytes each
-        nmi_vector: u16,
-        reset_vector: u16,
-        irq_vector: u16,
     }
 
     impl CPU {
@@ -42,14 +42,14 @@ mod cpu {
         /// Note this will increment the SP and *then* write the value
         fn push(&self, value: u8) {
             self.sp += 1;
-            let address: u16 = ((self.stack_page as u16) << 8) | (self.sp as u16);
+            let address: u16 = ((stack_page as u16) << 8) | (self.sp as u16);
             self.memory[address as usize] = value;
         }
 
         /// Pop a value off the stack
         /// This will read the value and then decrement the SP
         fn pop(&self) -> u8 {
-            let address: u16 = ((self.stack_page << 8) as u16) | (self.sp as u16);
+            let address: u16 = ((stack_page << 8) as u16) | (self.sp as u16);
             let value = self.memory[address as usize];
             self.sp -= 1;
             return value;
@@ -72,9 +72,10 @@ mod cpu {
         /// Start CPU execution
         pub fn start(&self) {
             // get the start address
+            // remember, the 6502 is little endian, so we fetch the high byte, then the low byte
             let start_address: u16 = (
-                (self.memory[self.reset_vector as usize] << 8) as u16) | 
-                (self.memory[(self.reset_vector + 1) as usize] as u16);
+                (self.memory[(reset_vector + 1) as usize] << 8) as u16) | 
+                (self.memory[reset_vector as usize] as u16);
             self.pc = start_address;
 
             // todo: additional start routines
