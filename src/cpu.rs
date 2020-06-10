@@ -350,7 +350,7 @@ impl CPU {
     fn execute_instruction(&mut self, opcode: u8) {
         // todo: this can be optimized with a few getter functions and instruction lookups
 
-        let i: instruction::Instruction = instruction::INSTRUCTIONS[&opcode];
+        let i: &instruction::Instruction = &instruction::INSTRUCTIONS[&opcode];
 
         if i.mnemonic == instruction::Mnemonic::ADC {
             self.adc(i.mode);
