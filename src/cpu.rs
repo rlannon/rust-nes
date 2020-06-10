@@ -1,6 +1,8 @@
 // cpu.rs
 // Implements the 6502 variant used in the NES
 
+mod instruction;
+
 /// The stack page is hard-wired to page 1
 const STACK_PAGE: u8 = 0x01;
 
@@ -31,22 +33,6 @@ enum Flag {
     Interrupt,
     Zero,
     Carry,
-}
-
-#[derive(PartialEq, Eq)]
-enum AddressingMode {
-    Immediate,
-    Zero,
-    ZeroX,
-    ZeroY,
-    Absolute,
-    AbsoluteX,
-    AbsoluteY,
-    Indirect,
-    IndirectX,
-    IndirectY,
-    Single,
-    Relative,
 }
 
 /// The struct that implements the NES's CPU.
@@ -118,19 +104,25 @@ impl CPU {
         self.status = (self.status & !flag_constant) | if v { flag_constant } else { 0 };
     }
 
+    /// Returns whether the specified flag is set or not
+    fn is_set(&self, f: Flag) -> bool {
+        let flag_constant = get_flag_constant(f);
+        return (self.status & flag_constant) != 0;
+    }
+
     /// Reads an 8-bit value for a register load according to the addressing mode
     /// This function automatically reads the appropriate number of bytes and updates the status register according to the value read
-    fn read_value(&mut self, mode: AddressingMode) -> u8 {
+    fn read_value(&mut self, mode: instruction::AddressingMode) -> u8 {
         // Get the offset
         let offset = if 
-            mode == AddressingMode::AbsoluteX || 
-            mode == AddressingMode::IndirectX || 
-            mode == AddressingMode::ZeroX {
+            mode == instruction::AddressingMode::AbsoluteX || 
+            mode == instruction::AddressingMode::IndirectX || 
+            mode == instruction::AddressingMode::ZeroX {
             self.x
         } else if 
-            mode == AddressingMode::AbsoluteY ||
-            mode == AddressingMode::IndirectY ||
-            mode == AddressingMode::ZeroY {
+            mode == instruction::AddressingMode::AbsoluteY ||
+            mode == instruction::AddressingMode::IndirectY ||
+            mode == instruction::AddressingMode::ZeroY {
             self.y
         } else {
             0
@@ -139,29 +131,29 @@ impl CPU {
         let value: u8;
 
         // Get the value
-        if mode == AddressingMode::Immediate {
+        if mode == instruction::AddressingMode::Immediate {
             value = self.memory[self.pc as usize];
         }
         else if
-            mode == AddressingMode::Zero ||
-            mode == AddressingMode::ZeroX ||
-            mode == AddressingMode::ZeroY {
+            mode == instruction::AddressingMode::Zero ||
+            mode == instruction::AddressingMode::ZeroX ||
+            mode == instruction::AddressingMode::ZeroY {
                 let address: u8 = self.memory[self.pc as usize] + offset;
                 value = self.memory[address as usize];
         }
         else if
-            mode == AddressingMode::Absolute ||
-            mode == AddressingMode::AbsoluteX ||
-            mode == AddressingMode::AbsoluteY {
+            mode == instruction::AddressingMode::Absolute ||
+            mode == instruction::AddressingMode::AbsoluteX ||
+            mode == instruction::AddressingMode::AbsoluteY {
                 let address: u16 = self.read_absolute_address() + offset as u16;
                 value = self.memory[address as usize];
         }
-        else if mode == AddressingMode::IndirectX {
-            let address: u16 = self.read_indexed_indirect_address(offset);
+        else if mode == instruction::AddressingMode::IndirectX {
+            let address: u16 = self.read_indexed_indirect_address();
             value = self.memory[address as usize];
         }
-        else if mode == AddressingMode::IndirectY {
-            let address: u16 = self.read_indirect_indexed_address(offset);
+        else if mode == instruction::AddressingMode::IndirectY {
+            let address: u16 = self.read_indirect_indexed_address();
             value = self.memory[address as usize];
         }
         else {
@@ -230,28 +222,50 @@ impl CPU {
 
     /// Gets the address for the indirect indexed (indirect Y) addressing mode
     /// Reads one byte, giving the address in the zero page where the pointer is stored; the little-endian 16-bit address is then read and returned
-    fn read_indirect_indexed_address(&self, offset: u8) -> u16 {
+    /// Since indirect indexed can only be used with the Y register, we don't need an offset
+    fn read_indirect_indexed_address(&self) -> u16 {
         let zp_address: u8 = self.memory[self.pc as usize];
         let mut address: u16 = 
             (self.memory[zp_address as usize] as u16) |
             ((self.memory[(zp_address + 1) as usize] as u16) << 8)
         ;
-        address += offset as u16;
+        address += self.y as u16;
 
         address
     }
 
-    /// Gets the indexed indirect address
-    fn read_indexed_indirect_address(&self, offset: u8) -> u16 {
-        let zp_address: u8 = self.memory[self.pc as usize] + offset;
+    /// Gets the indexed indirect address (indirect X)
+    /// Like indirect indexed, indexed indirect can only be used with the X register -- so we don't need an offset
+    fn read_indexed_indirect_address(&self) -> u16 {
+        let zp_address: u8 = self.memory[self.pc as usize] + self.x;
         let address: u16 =
             (self.memory[zp_address as usize] as u16) |
             ((self.memory[(zp_address + 1) as usize] as u16) << 8);
         address
     }
 
-    /// Store an 8-bit value `value` in memory at address `address` 
-    fn store(&mut self, address: u16, value: u8) {
+    /// Store an 8-bit value `value` in memory at address according to the addressing mode `mode`
+    /// Affects no flags
+    fn store(&mut self, value: u8, offset: u8, mode: instruction::AddressingMode) {
+        // Store according to the mode
+        let address;
+        if mode == instruction::AddressingMode::Absolute || mode == instruction::AddressingMode::AbsoluteX || mode == instruction::AddressingMode::AbsoluteY {
+            address = self.read_absolute_address() + offset as u16;
+        }
+        else if mode == instruction::AddressingMode::Zero || mode == instruction::AddressingMode::ZeroX || mode == instruction::AddressingMode::ZeroY {
+            address = (self.memory[self.pc as usize] + offset) as u16;
+        }
+        else if mode == instruction::AddressingMode::IndirectX {
+            address = self.read_indexed_indirect_address();
+        } else if mode == instruction::AddressingMode::IndirectY {
+            address = self.read_indirect_indexed_address();
+        }
+        else {
+            // todo: invalid mode?
+            address = 0;
+        }
+
+        // perform the assignment
         self.memory[address as usize] = value;
     }
 
@@ -279,52 +293,255 @@ impl CPU {
         return value;
     }
 
+    /// Performs subtraction, fetching values automatically according to `mode`. Also automatically stores result in the accumulator.
+    fn sbc(&mut self, mode: instruction::AddressingMode) {
+        // fetch our values
+        let minuend = self.a as u16 | if self.is_set(Flag::Carry) { 0x100 } else { 0 };
+        let subtrahend = self.read_value(mode);
+
+        // perform the subtraction
+        let result = minuend - subtrahend as u16;
+        self.set_flag(
+            Flag::Carry, 
+            if result & 0x100 != 0 { true } else { false }
+        );
+
+        // todo: update flags
+
+        // finally, set A
+        self.a = result as u8;
+    }
+
+    /// Performs addition, fetching values automatically according to `mode`. Also automatically stores result in the accumulator.
+    fn adc(&mut self, mode: instruction::AddressingMode) {
+        // fetch values
+        let addend = self.a as u16;
+        let augend = self.read_value(mode) as u16;
+        
+        // set the overflow flag if necessary (addition would take it out of the signed integer range)
+        self.set_flag(
+            Flag::Overflow, 
+            if (addend ^ augend) & 0x80 != 0 { false } else { true }
+        );
+        
+        let result: u16 = addend + augend + if self.is_set(Flag::Carry) { 1 } else { 0 };
+    }
+
     /// Executes the instruction supplied; reads from memory appropriately
     fn execute_instruction(&mut self, opcode: u8) {
         // todo: this can be optimized with a few getter functions and instruction lookups
-        if opcode == 0x4c {
+        // what we would need to do would be to group the instructions together and utilize Instruction objects
+        /*
+
+        Immediate     ADC #$44      $69  2   2
+        Zero Page     ADC $44       $65  2   3
+        Zero Page,X   ADC $44,X     $75  2   4
+        Absolute      ADC $4400     $6D  3   4
+        Absolute,X    ADC $4400,X   $7D  3   4+
+        Absolute,Y    ADC $4400,Y   $79  3   4+
+        Indirect,X    ADC ($44,X)   $61  2   6
+        Indirect,Y    ADC ($44),Y   $71  2   5+
+
+        */
+        if opcode == 0x69 {
+            // ADC - Imm
+            self.adc(instruction::AddressingMode::Immediate);
+        }
+        else if opcode == 0x65 {
+            // ADC - ZP
+            self.adc(instruction::AddressingMode::Zero);
+        }
+        else if opcode == 0x75 {
+            // ADC - ZP, X
+            self.adc(instruction::AddressingMode::ZeroX);
+        }
+        else if opcode == 0xd6 {
+            // ADC - Abs
+            self.adc(instruction::AddressingMode::Absolute);
+        }
+        else if opcode == 0x7d {
+            // ADC - Abs, X
+            self.adc(instruction::AddressingMode::AbsoluteX);
+        }
+        else if opcode == 0x79 {
+            // ADC - Abs, Y
+            self.adc(instruction::AddressingMode::AbsoluteY);
+        }
+        else if opcode == 0x61 {
+            // ADC - Ind X
+            self.adc(instruction::AddressingMode::IndirectX);
+        }
+        else if opcode == 0x71 {
+            // ADC - Ind Y
+            self.adc(instruction::AddressingMode::IndirectY);
+        }
+
+        // todo: more opcodes
+
+        else if opcode == 0x4c {
             // JMP - Absolute
             self.pc = self.read_absolute_address();
         }
         else if opcode == 0xa9 {
             // LDA - Immediate
-            self.a = self.read_value(AddressingMode::Immediate);
+            self.a = self.read_value(instruction::AddressingMode::Immediate);
             self.update_status(self.a);
         }
         else if opcode == 0xa5 {
             // LDA - Zero
-            self.a = self.read_value(AddressingMode::Zero);
+            self.a = self.read_value(instruction::AddressingMode::Zero);
             self.update_status(self.a);
         }
         else if opcode == 0xb5 {
             // LDA - Zero, X
-            self.a = self.read_value(AddressingMode::ZeroX);
+            self.a = self.read_value(instruction::AddressingMode::ZeroX);
             self.update_status(self.a);
         }
         else if opcode == 0xad {
             // LDA - Absolute
-            self.a = self.read_value(AddressingMode::Absolute);
+            self.a = self.read_value(instruction::AddressingMode::Absolute);
             self.update_status(self.a);
         }
         else if opcode == 0xbd {
             // LDA - Absolute, X
-            self.a = self.read_value(AddressingMode::AbsoluteX);
+            self.a = self.read_value(instruction::AddressingMode::AbsoluteX);
             self.update_status(self.a);
         }
         else if opcode == 0xb9 {
             // LDA - Absolute, Y
-            self.a = self.read_value(AddressingMode::AbsoluteY);
+            self.a = self.read_value(instruction::AddressingMode::AbsoluteY);
             self.update_status(self.a);
         }
         else if opcode == 0xa1 {
             // LDA - Indirect, X
-            self.a = self.read_value(AddressingMode::IndirectX);
+            self.a = self.read_value(instruction::AddressingMode::IndirectX);
             self.update_status(self.a);
         }
         else if opcode == 0xb1 {
             // LDA - Indirect, Y
-            self.a = self.read_value(AddressingMode::IndirectY);
+            self.a = self.read_value(instruction::AddressingMode::IndirectY);
             self.update_status(self.a);
+        }
+        /*
+
+        Note that the SBC instruction normally can utilize binary-coded decimal,
+            but the decimal flag is not functional on the NES
+        As such, these instructions never utilize BCD
+
+        The carry flag is always used in subtraction - there is no way to subtract without carry
+
+
+        */
+        else if opcode == 0x44 {
+            // SBC, Imm
+            self.sbc(instruction::AddressingMode::Immediate);
+        }
+        else if opcode == 0xe5 {
+            // SBC, ZP
+            self.sbc(instruction::AddressingMode::Zero);
+        }
+        else if opcode == 0xf5 {
+            // SBC, ZP X
+            self.sbc(instruction::AddressingMode::ZeroX);
+        }
+        else if opcode == 0xed {
+            // SBC - Abs
+            self.sbc(instruction::AddressingMode::Absolute);
+        }
+        else if opcode == 0xfd {
+            // SBC - Abs, X
+            self.sbc(instruction::AddressingMode::AbsoluteX);
+        }
+        else if opcode == 0xf9 {
+            // SBC - Abs, Y
+            self.sbc(instruction::AddressingMode::AbsoluteY);
+        }
+        else if opcode == 0xe1 {
+            // SBC - Ind X
+            self.sbc(instruction::AddressingMode::IndirectX);
+        }
+        else if opcode == 0xf1 {
+            // SBC - Ind Y
+            self.sbc(instruction::AddressingMode::IndirectY);
+        }
+        else if opcode == 0x85 {
+            // STA - ZP
+            self.store(self.a, 0, instruction::AddressingMode::Zero);
+        }
+        else if opcode == 0x95 {
+            // STA - ZP, X
+            self.store(self.a, self.x, instruction::AddressingMode::ZeroX);
+        }
+        else if opcode == 0x8d {
+            // STA - Abs
+            self.store(self.a, 0, instruction::AddressingMode::Absolute);
+        }
+        else if opcode == 0x9d {
+            // STA - Abs, X
+            self.store(self.a, self.x, instruction::AddressingMode::AbsoluteX);
+        }
+        else if opcode == 0x99 {
+            // STA - Abs, Y
+            self.store(self.a, self.y, instruction::AddressingMode::AbsoluteY);
+        }
+        else if opcode == 0x8a {
+            // STA - Ind X
+            self.store(self.a, self.x, instruction::AddressingMode::IndirectX);  // note: offset is unused
+        } 
+        else if opcode == 0x91 {
+            // STA - Ind Y
+            self.store(self.a, self.y, instruction::AddressingMode::IndirectY);  // note: offset is unused
+        }
+        else if opcode == 0x9a {
+            // TXS
+            self.sp = self.x;
+            self.update_status(self.sp);
+        }
+        else if opcode == 0xba {
+            // TSX
+            self.x = self.sp;
+            self.update_status(self.x);
+        }
+        else if opcode == 0x48 {
+            // PHA
+            self.push(self.a);
+        }
+        else if opcode == 0x68 {
+            // PLA
+            self.a = self.pop();
+            self.update_status(self.a);
+        }
+        else if opcode == 0x08 {
+            // PHP
+            self.push(self.status);
+        }
+        else if opcode == 0x28 {
+            // PLP
+            self.status = self.pop();
+        }
+        else if opcode == 0x86 {
+            // STX - ZP
+            self.store(self.x, 0, instruction::AddressingMode::Zero);
+        }
+        else if opcode == 0x96 {
+            // STX - ZP, Y
+            self.store(self.x, self.y, instruction::AddressingMode::ZeroY);
+        }
+        else if opcode == 0x8e {
+            // STX - Abs
+            self.store(self.x, 0, instruction::AddressingMode::Absolute);
+        }
+        else if opcode == 0x84 {
+            // STY - ZP
+            self.store(self.y, 0, instruction::AddressingMode::Zero);
+        }
+        else if opcode == 0x94 {
+            // STY - ZP, X
+            self.store(self.y, self.x, instruction::AddressingMode::ZeroX);
+        }
+        else if opcode == 0x8c {
+            // STY - Abs
+            self.store(self.y, 0, instruction::AddressingMode::Absolute);
         }
     }
 
