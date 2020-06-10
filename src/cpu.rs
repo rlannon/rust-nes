@@ -194,8 +194,11 @@ impl CPU {
 
     /// Gets an indirect address
     /// Indirect addresses always give the first byte of the pointer, meaning if the value `0x23C0` is given, it looks to `0x23C0 - 0x23C1` for the address.
+    ///
     /// This function reproduces the behavior of a well-known hardware bug of the 6502 that is caused when the low byte of the address is located on the last byte of a page. When this happens, the full 16-bit address is not incremented by one, rather, *only the low byte* is. This means if we have an instruction like
+    ///
     ///     jmp ($02FF)
+    ///
     /// instead of loading the address from `0x02FF - 0x0300`, the low byte will come from `0x02FF` and the high byte will come from `0x0200`. As such, an indirect jump should *never* use the last byte of a page in its indirection.
     fn read_indirect_address(&mut self) -> u16 {
         // fetch the address locations
@@ -244,9 +247,25 @@ impl CPU {
         address
     }
 
-    /// Store an 8-bit value `value` in memory at address according to the addressing mode `mode`
-    /// Affects no flags
-    fn store(&mut self, value: u8, offset: u8, mode: instruction::AddressingMode) {
+    /// Store an 8-bit value `value` in memory at address according to the addressing mode `mode`.
+    /// Affects no flags.
+    fn store(&mut self, value: u8, mode: instruction::AddressingMode) {
+        // Get the offset
+        let offset: u8 = 
+                if (i.mode == instruction::AddressingMode::AbsoluteX ||
+                    i.mode == instruction::AddressingMode::ZeroX)
+                {
+                    self.x
+                }
+                else if (i.mode == instruction::AddressingMode::AbsoluteY ||
+                        i.mode == instruction::AddressingMode::AbsoluteY)
+                {
+                    self.y
+                }
+                else {
+                    0
+                };
+        
         // Store according to the mode
         let address;
         if mode == instruction::AddressingMode::Absolute || mode == instruction::AddressingMode::AbsoluteX || mode == instruction::AddressingMode::AbsoluteY {
@@ -330,50 +349,11 @@ impl CPU {
     /// Executes the instruction supplied; reads from memory appropriately
     fn execute_instruction(&mut self, opcode: u8) {
         // todo: this can be optimized with a few getter functions and instruction lookups
-        // what we would need to do would be to group the instructions together and utilize Instruction objects
-        /*
 
-        Immediate     ADC #$44      $69  2   2
-        Zero Page     ADC $44       $65  2   3
-        Zero Page,X   ADC $44,X     $75  2   4
-        Absolute      ADC $4400     $6D  3   4
-        Absolute,X    ADC $4400,X   $7D  3   4+
-        Absolute,Y    ADC $4400,Y   $79  3   4+
-        Indirect,X    ADC ($44,X)   $61  2   6
-        Indirect,Y    ADC ($44),Y   $71  2   5+
+        let i: Instruction = instruction::INSTRUCTIONS[opcode];
 
-        */
-        if opcode == 0x69 {
-            // ADC - Imm
-            self.adc(instruction::AddressingMode::Immediate);
-        }
-        else if opcode == 0x65 {
-            // ADC - ZP
-            self.adc(instruction::AddressingMode::Zero);
-        }
-        else if opcode == 0x75 {
-            // ADC - ZP, X
-            self.adc(instruction::AddressingMode::ZeroX);
-        }
-        else if opcode == 0xd6 {
-            // ADC - Abs
-            self.adc(instruction::AddressingMode::Absolute);
-        }
-        else if opcode == 0x7d {
-            // ADC - Abs, X
-            self.adc(instruction::AddressingMode::AbsoluteX);
-        }
-        else if opcode == 0x79 {
-            // ADC - Abs, Y
-            self.adc(instruction::AddressingMode::AbsoluteY);
-        }
-        else if opcode == 0x61 {
-            // ADC - Ind X
-            self.adc(instruction::AddressingMode::IndirectX);
-        }
-        else if opcode == 0x71 {
-            // ADC - Ind Y
-            self.adc(instruction::AddressingMode::IndirectY);
+        if i.mnemonic == instruction::Mnemonic::ADC {
+            self.adc(i.mode);
         }
 
         // todo: more opcodes
@@ -382,46 +362,26 @@ impl CPU {
             // JMP - Absolute
             self.pc = self.read_absolute_address();
         }
-        else if opcode == 0xa9 {
-            // LDA - Immediate
-            self.a = self.read_value(instruction::AddressingMode::Immediate);
+        else if opcode == 0x6c {
+            // JMP - Indirect
+            self.pc = self.read_indirect_address();
+        }
+        else if i.mnemonic == instruction::Mnemonic::LDA {
+            // LDA
+            self.a = self.read_value(i.mode);
             self.update_status(self.a);
         }
-        else if opcode == 0xa5 {
-            // LDA - Zero
-            self.a = self.read_value(instruction::AddressingMode::Zero);
-            self.update_status(self.a);
+        else if i.mnemonic == instruction::Mnemonic::LDX {
+            // LDX
+            self.x = self.read_value(i.mode);
+            self.update_status(self.x);
         }
-        else if opcode == 0xb5 {
-            // LDA - Zero, X
-            self.a = self.read_value(instruction::AddressingMode::ZeroX);
-            self.update_status(self.a);
+        else if i.mnemonic == instruction::Mnemonic::LDY {
+            // LDY
+            self.y = self.read_value(i.mode);
+            self.update_status(self.y);
         }
-        else if opcode == 0xad {
-            // LDA - Absolute
-            self.a = self.read_value(instruction::AddressingMode::Absolute);
-            self.update_status(self.a);
-        }
-        else if opcode == 0xbd {
-            // LDA - Absolute, X
-            self.a = self.read_value(instruction::AddressingMode::AbsoluteX);
-            self.update_status(self.a);
-        }
-        else if opcode == 0xb9 {
-            // LDA - Absolute, Y
-            self.a = self.read_value(instruction::AddressingMode::AbsoluteY);
-            self.update_status(self.a);
-        }
-        else if opcode == 0xa1 {
-            // LDA - Indirect, X
-            self.a = self.read_value(instruction::AddressingMode::IndirectX);
-            self.update_status(self.a);
-        }
-        else if opcode == 0xb1 {
-            // LDA - Indirect, Y
-            self.a = self.read_value(instruction::AddressingMode::IndirectY);
-            self.update_status(self.a);
-        }
+
         /*
 
         Note that the SBC instruction normally can utilize binary-coded decimal,
@@ -432,65 +392,13 @@ impl CPU {
 
 
         */
-        else if opcode == 0x44 {
+        else if i.mnemonic == instruction::Mnemonic::SBC {
             // SBC, Imm
-            self.sbc(instruction::AddressingMode::Immediate);
+            self.sbc(i.mode);
         }
-        else if opcode == 0xe5 {
-            // SBC, ZP
-            self.sbc(instruction::AddressingMode::Zero);
-        }
-        else if opcode == 0xf5 {
-            // SBC, ZP X
-            self.sbc(instruction::AddressingMode::ZeroX);
-        }
-        else if opcode == 0xed {
-            // SBC - Abs
-            self.sbc(instruction::AddressingMode::Absolute);
-        }
-        else if opcode == 0xfd {
-            // SBC - Abs, X
-            self.sbc(instruction::AddressingMode::AbsoluteX);
-        }
-        else if opcode == 0xf9 {
-            // SBC - Abs, Y
-            self.sbc(instruction::AddressingMode::AbsoluteY);
-        }
-        else if opcode == 0xe1 {
-            // SBC - Ind X
-            self.sbc(instruction::AddressingMode::IndirectX);
-        }
-        else if opcode == 0xf1 {
-            // SBC - Ind Y
-            self.sbc(instruction::AddressingMode::IndirectY);
-        }
-        else if opcode == 0x85 {
+        else if i.mnemonic == instruction::Mnemonic::STA {
             // STA - ZP
-            self.store(self.a, 0, instruction::AddressingMode::Zero);
-        }
-        else if opcode == 0x95 {
-            // STA - ZP, X
-            self.store(self.a, self.x, instruction::AddressingMode::ZeroX);
-        }
-        else if opcode == 0x8d {
-            // STA - Abs
-            self.store(self.a, 0, instruction::AddressingMode::Absolute);
-        }
-        else if opcode == 0x9d {
-            // STA - Abs, X
-            self.store(self.a, self.x, instruction::AddressingMode::AbsoluteX);
-        }
-        else if opcode == 0x99 {
-            // STA - Abs, Y
-            self.store(self.a, self.y, instruction::AddressingMode::AbsoluteY);
-        }
-        else if opcode == 0x8a {
-            // STA - Ind X
-            self.store(self.a, self.x, instruction::AddressingMode::IndirectX);  // note: offset is unused
-        } 
-        else if opcode == 0x91 {
-            // STA - Ind Y
-            self.store(self.a, self.y, instruction::AddressingMode::IndirectY);  // note: offset is unused
+            self.store(self.a, i.mode);
         }
         else if opcode == 0x9a {
             // TXS
@@ -519,29 +427,13 @@ impl CPU {
             // PLP
             self.status = self.pop();
         }
-        else if opcode == 0x86 {
-            // STX - ZP
-            self.store(self.x, 0, instruction::AddressingMode::Zero);
+        else if i.mnemonic == instruction::Mnemonic::STX {
+            // STX
+            self.store(self.x, i.mode);
         }
-        else if opcode == 0x96 {
-            // STX - ZP, Y
-            self.store(self.x, self.y, instruction::AddressingMode::ZeroY);
-        }
-        else if opcode == 0x8e {
-            // STX - Abs
-            self.store(self.x, 0, instruction::AddressingMode::Absolute);
-        }
-        else if opcode == 0x84 {
-            // STY - ZP
-            self.store(self.y, 0, instruction::AddressingMode::Zero);
-        }
-        else if opcode == 0x94 {
-            // STY - ZP, X
-            self.store(self.y, self.x, instruction::AddressingMode::ZeroX);
-        }
-        else if opcode == 0x8c {
-            // STY - Abs
-            self.store(self.y, 0, instruction::AddressingMode::Absolute);
+        else if i.mnemonic == instruction::Mnemonic::STY {
+            // STY
+            self.store(self.y, i.mode);
         }
     }
 
