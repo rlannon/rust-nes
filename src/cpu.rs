@@ -252,13 +252,13 @@ impl CPU {
     fn store(&mut self, value: u8, mode: instruction::AddressingMode) {
         // Get the offset
         let offset: u8 = 
-                if (i.mode == instruction::AddressingMode::AbsoluteX ||
-                    i.mode == instruction::AddressingMode::ZeroX)
+                if mode == instruction::AddressingMode::AbsoluteX ||
+                    mode == instruction::AddressingMode::ZeroX
                 {
                     self.x
                 }
-                else if (i.mode == instruction::AddressingMode::AbsoluteY ||
-                        i.mode == instruction::AddressingMode::AbsoluteY)
+                else if mode == instruction::AddressingMode::AbsoluteY ||
+                        mode == instruction::AddressingMode::AbsoluteY
                 {
                     self.y
                 }
@@ -350,7 +350,7 @@ impl CPU {
     fn execute_instruction(&mut self, opcode: u8) {
         // todo: this can be optimized with a few getter functions and instruction lookups
 
-        let i: Instruction = instruction::INSTRUCTIONS[opcode];
+        let i: instruction::Instruction = instruction::INSTRUCTIONS[&opcode];
 
         if i.mnemonic == instruction::Mnemonic::ADC {
             self.adc(i.mode);

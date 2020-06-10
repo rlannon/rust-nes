@@ -28,10 +28,10 @@ pub enum AddressingMode {
     Accumulator,
 }
 
-struct Instruction {
+pub struct Instruction {
     opcode: u8,
-    mnemonic: Mnemonic,
-    mode: AddressingMode,
+    pub mnemonic: Mnemonic,
+    pub mode: AddressingMode,
 }
 
 pub static INSTRUCTIONS: phf::Map<u8, Instruction> = phf_map! {
