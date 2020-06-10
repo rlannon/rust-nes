@@ -34,7 +34,7 @@ struct Instruction {
     mode: AddressingMode,
 }
 
-static INSTRUCTIONS: phf::Map<u8, Instruction> = phf_map! {
+pub static INSTRUCTIONS: phf::Map<u8, Instruction> = phf_map! {
     // ADC
     0x69 => Instruction{
         opcode: 0x69,
@@ -281,5 +281,27 @@ static INSTRUCTIONS: phf::Map<u8, Instruction> = phf_map! {
         opcode: 0xcc,
         mnemonic: Mnemonic::CPY,
         mode: AddressingMode::Absolute,
+    },
+
+    // DEC
+    0xc6 => Instruction{
+        opcode: 0xc6,
+        mnemonic: Mnemonic::DEC,
+        mode: AddressingMode::Zero,
+    },
+    0xd6 => Instruction {
+        opcode: 0xd6,
+        mnemonic: Mnemonic::DEC,
+        mode: AddressingMode::ZeroX,
+    },
+    0xce => Instruction{
+        opcode: 0xce,
+        mnemonic: Mnemonic::DEC,
+        mode: AddressingMode::Absolute,
+    },
+    0xde => Instruction{
+        opcode: 0xde,
+        mnemonic: Mnemonic::DEC,
+        mode: AddressingMode::AbsoluteX,
     },
 };
