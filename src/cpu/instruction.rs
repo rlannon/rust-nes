@@ -304,4 +304,161 @@ pub static INSTRUCTIONS: phf::Map<u8, Instruction> = phf_map! {
         mnemonic: Mnemonic::DEC,
         mode: AddressingMode::AbsoluteX,
     },
+
+    // EOR
+    0x49 => Instruction{
+        opcode: 0x49,
+        mnemonic: Mnemonic::EOR,
+        mode: AddressingMode::Immediate,
+    },
+    0x45 => Instruction{
+        opcode: 0x45,
+        mnemonic: Mnemonic::EOR,
+        mode: AddressingMode::Zero,
+    },
+    0x55 => Instruction{
+        opcode: 0x55,
+        mnemonic: Mnemonic::EOR,
+        mode: AddressingMode::ZeroX,
+    },
+    0x4d => Instruction{
+        opcode: 0x4d,
+        mnemonic: Mnemonic::EOR,
+        mode: AddressingMode::Absolute,
+    },
+    0x5d => Instruction{
+        opcode: 0x5d,
+        mnemonic: Mnemonic::EOR,
+        mode: AddressingMode::AbsoluteX,
+    },
+    0x59 => Instruction{
+        opcode: 0x59,
+        mnemonic: Mnemonic::EOR,
+        mode: AddressingMode::AbsoluteY,
+    },
+    0x41 => Instruction{
+        opcode: 0x41,
+        mnemonic: Mnemonic::EOR,
+        mode: AddressingMode::IndirectX,
+    },
+    0x51 => Instruction{
+        opcode: 0x51,
+        mnemonic: Mnemonic::EOR,
+        mode: AddressingMode::IndirectY,
+    },
+
+    // Flag instructions
+    0x18 => Instruction{
+        opcode: 0x18,
+        mnemonic: Mnemonic::CLC,
+        mode: AddressingMode::Implied,
+    },
+    0x38 => Instruction{
+        opcode: 0x38,
+        mnemonic: Mnemonic::SEC,
+        mode: AddressingMode::Implied,
+    },
+    0x58 => Instruction{
+        opcode: 0x58,
+        mnemonic: Mnemonic::CLI,
+        mode: AddressingMode::Implied,
+    },
+    0x78 => Instruction{
+        opcode: 0x78,
+        mnemonic: Mnemonic::SEI,
+        mode: AddressingMode::Implied,
+    },
+    0xb8 => Instruction{
+        opcode: 0xb8,
+        mnemonic: Mnemonic::CLV,
+        mode: AddressingMode::Implied,
+    },
+    0xd8 => Instruction{
+        opcode: 0xd8,
+        mnemonic: Mnemonic::CLD,
+        mode: AddressingMode::Implied,
+    },
+    0xf8 => Instruction{
+        opcode: 0xf8,
+        mnemonic: Mnemonic::SED,
+        mode: AddressingMode::Implied,
+    },
+
+    // INC
+    0xe6 => Instruction{
+        opcode: 0xe6,
+        mnemonic: Mnemonic::INC,
+        mode: AddressingMode::Zero,
+    },
+    0xf6 => Instruction{
+        opcode: 0xf6,
+        mnemonic: Mnemonic::INC,
+        mode: AddressingMode::ZeroX,
+    },
+    0xee => Instruction{
+        opcode: 0xee,
+        mnemonic: Mnemonic::INC,
+        mode: AddressingMode::Absolute,
+    },
+    0xfe => Instruction{
+        opcode: 0xfe,
+        mnemonic: Mnemonic::INC,
+        mode: AddressingMode::AbsoluteX,
+    },
+
+    // JMP
+    0x4c => Instruction{
+        opcode: 0x4c,
+        mnemonic: Mnemonic::JMP,
+        mode: AddressingMode::Absolute,
+    },
+    0x6c => Instruction{
+        opcode: 0x6c,
+        mnemonic: Mnemonic::JMP,
+        mode: AddressingMode::Indirect,
+    },
+
+    // JSR
+    0x20 => Instruction{
+        opcode: 0x20,
+        mnemonic: Mnemonic::JSR,
+        mode: AddressingMode::Absolute,
+    },
+
+    // LDA
+
+    // LDX
+
+    // LDY
+
+    // LSR
+
+    // NOP
+    0xea => Instruction{
+        opcode: 0xea,
+        mnemonic: Mnemonic::NOP,
+        mode: AddressingMode::Implied,
+    },
+
+    // ORA
+
+    // Register transfer instructions
+
+    // ROL
+
+    // ROR
+
+    // RTI
+
+    // RTS
+
+    // SBC
+
+    // STA
+
+    // Stack instructions
+
+    // STX
+
+    // STY
 };
