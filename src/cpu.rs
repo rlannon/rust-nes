@@ -481,6 +481,24 @@ impl CPU {
                 self.shift_left(address);
             }
         }
+        else if i.mnemonic == instruction::Mnemonic::BIT {
+            // Test bits
+            // Sets the Z flag as if A and [operand] were ANDed together; sets N and V to bits 7 and 6 of the operand, respecitvely.
+            let address = self.read_address(i.mode);
+            self.set_flag(Flag::Zero, (self.a & self.memory[address as usize]) != 0);
+            self.set_flag(Flag::Negative, (self.memory[address as usize] & N_FLAG) != 0);
+            self.set_flag(Flag::Overflow, (self.memory[address as usize] & V_FLAG) != 0);
+        }
+        else if i.mnemonic == instruction::Mnemonic::BPL {
+            // Branch on plus (N = 0)
+            let offset = self.memory[self.pc as usize] as i8;   // offset is signed
+            if offset < 0 {
+                self.pc -= (offset as i16).abs() as u16;
+            }
+            else {
+                self.pc += offset as u16;
+            }
+        }
 
         // todo: more opcodes
 
@@ -613,9 +631,8 @@ impl CPU {
         
         // execute that instruction
         self.execute_instruction(instruction);
-        
-        // increment the program counter
-        self.pc += 1;
+
+        // todo: each instruction should increment the pc accordingly
     }
 
     /// Resets the CPU, leaving it in a ready state
