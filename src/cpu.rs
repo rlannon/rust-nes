@@ -40,6 +40,9 @@ pub struct CPU {
     // track cycle count since last vblank
     cycles: u64,
 
+    // whether the processor is running
+    running: bool,
+
     // processor registers
     status: u8,
     pc: u16,
@@ -57,6 +60,7 @@ impl Default for CPU {
     fn default() -> CPU {
         CPU {
             cycles: 0,
+            running: false,
             status: 0,
             pc: 0,
             sp: 0,
@@ -182,6 +186,48 @@ impl CPU {
         }
     }
 
+    fn read_address(&mut self, mode: instruction::AddressingMode) -> u16 {
+        if mode == instruction::AddressingMode::Zero ||
+            mode == instruction::AddressingMode::ZeroX ||
+            mode == instruction::AddressingMode::ZeroY
+        {
+            return self.read_zp_address(mode);
+        }
+        else if
+            mode == instruction::AddressingMode::Absolute ||
+            mode == instruction::AddressingMode::AbsoluteX ||
+            mode == instruction::AddressingMode::AbsoluteY
+        {
+            return self.read_absolute_address() + 
+                if mode == instruction::AddressingMode::AbsoluteX { self.x as u16 }
+                else if mode == instruction::AddressingMode::AbsoluteY { self.y as u16 }
+                else { 0 };
+        }
+        else if
+            mode == instruction::AddressingMode::Indirect
+        {
+            return self.read_indirect_address();
+        }
+        else if mode == instruction::AddressingMode::IndirectX {
+            return self.read_indexed_indirect_address();
+        }
+        else if mode == instruction::AddressingMode::IndirectY {
+            return self.read_indirect_indexed_address();
+        }
+        else {
+            return 0;
+        }
+    }
+
+    /// Reads a value from memory and returns the appropriate zero page address based on the addressing mode.
+    fn read_zp_address(&self, mode: instruction::AddressingMode) -> u16 {
+        let address = self.memory[self.pc as usize] +
+            if mode == instruction::AddressingMode::ZeroX { self.x } 
+            else if mode == instruction::AddressingMode::ZeroY { self.y } 
+            else { 0 };
+        return address as u16;
+    }
+
     /// Get the address located at self.pc, self.pc + 1
     /// Increments the pc to the last byte of the address
     fn read_absolute_address(&mut self) -> u16 {
@@ -288,11 +334,6 @@ impl CPU {
         self.memory[address as usize] = value;
     }
 
-    /// Fetch a value from memory
-    fn fetch(&self, address: u16) -> u8 {
-        return self.memory[address as usize];
-    }
-
     /// Push a value `value` onto the stack
     /// Note this will increment the SP and *then* write the value
     /// It's also worth noting that the 6502 does not have overflow detection, so if the stack pointer wraps around, that's normal behavior for the processor
@@ -318,14 +359,22 @@ impl CPU {
         let minuend = self.a as u16 | if self.is_set(Flag::Carry) { 0x100 } else { 0 };
         let subtrahend = self.read_value(mode);
 
+        // set the overflow flag if necessary (subtraction would take it out of the signed integer range)
+        self.set_flag(
+            Flag::Overflow, 
+            if (minuend ^ subtrahend as u16) & 0x80 != 0 { true } else { false }
+        );
+
         // perform the subtraction
         let result = minuend - subtrahend as u16;
         self.set_flag(
             Flag::Carry, 
-            if result & 0x100 != 0 { true } else { false }
+            if result > 0xff { false } else { true }
         );
-
-        // todo: update flags
+        if self.is_set(Flag::Overflow) {
+            self.set_flag(Flag::Overflow, if result < 0x80 || result >= 0x180 { false } else { true });
+        }
+        self.update_status(result as u8);
 
         // finally, set A
         self.a = result as u8;
@@ -343,7 +392,66 @@ impl CPU {
             if (addend ^ augend) & 0x80 != 0 { false } else { true }
         );
         
+        // perform the addition
         let result: u16 = addend + augend + if self.is_set(Flag::Carry) { 1 } else { 0 };
+
+        // update status flags, clearing the overflow flag based on the result
+        self.set_flag(
+            Flag::Carry, 
+            if result > 0xff { false } else { true }
+        );
+        if self.is_set(Flag::Overflow) {
+            self.set_flag(Flag::Overflow, if result < 0x80 || result >= 0x180 { false } else { true });
+        }
+        self.update_status(result as u8);
+
+        // finally, set accumulator
+        self.a = (result & 0xff) as u8;
+    }
+
+    /// Carry out the AND instruction, performing a logical AND between A and the fetched operand.
+    fn and(&mut self, mode: instruction::AddressingMode) {
+        let operand: u8 = self.read_value(mode);
+        self.a &= operand;
+        self.update_status(self.a);
+    }
+
+    /// Shifts bits at memory address `address` left one position.
+    /// A bitshift means zero is shifted in and the outgoing bit is shifted into the Carry bit.
+    fn shift_left(&mut self, address: u16) {
+        let msb = (self.memory[address as usize] & 0x80) != 0;
+        self.memory[address as usize] <<= 1;
+        self.set_flag(Flag::Carry, msb);
+        self.update_status(self.memory[address as usize]);
+    }
+
+    /// Shifts bits at `address` right one position.
+    /// A zero is shifted in and the LSB is shifted into the carry bit.
+    fn shift_right(&mut self, address: u16) {
+        let lsb = (self.memory[address as usize] & 0x80) != 0;
+        self.memory[address as usize] >>= 1;
+        self.set_flag(Flag::Carry, lsb);
+        self.update_status(self.memory[address as usize]);
+    }
+
+    /// Rotates bits at `address` left one position.
+    /// A rotation means Carry is shifted into the incoming position and the outgoing bit is shifted into the Carry bit.
+    fn rotate_left(&mut self, address: u16) {
+        let c = self.is_set(Flag::Carry);
+        self.set_flag(Flag::Carry, self.memory[address as usize] & 0x80 != 0);  // if the MSB is set, set the carry bit
+        self.memory[address as usize] <<= 1;
+        self.memory[address as usize] |= c as u8;
+        self.update_status(self.memory[address as usize]);
+    }
+
+    /// Rotates bits at `address` right one position.
+    /// The outgoing bit is shifted into the carry bit, and the original carry bit is shifted into the incoming bit position.
+    fn rotate_right(&mut self, address: u16) {
+        let c = self.is_set(Flag::Carry);
+        self.set_flag(Flag::Carry, self.memory[address as usize] & 1 != 0); // if the LSB is set, set the carry
+        self.memory[address as usize] >>= 1;
+        self.memory[address as usize] |= if c { 0x80 } else { 0 };
+        self.update_status(self.memory[address as usize]);
     }
 
     /// Executes the instruction supplied; reads from memory appropriately
@@ -353,7 +461,25 @@ impl CPU {
         let i: &instruction::Instruction = &instruction::INSTRUCTIONS[&opcode];
 
         if i.mnemonic == instruction::Mnemonic::ADC {
+            // Add with carry
             self.adc(i.mode);
+        }
+        else if i.mnemonic == instruction::Mnemonic::AND {
+            // Logical AND with accumulator
+            self.and(i.mode);
+        }
+        else if i.mnemonic == instruction::Mnemonic::ASL {
+            // Arithmetic shift left
+            // this instruction can operate on the accumulator
+            if i.mode == instruction::AddressingMode::Accumulator {
+                let msb = (self.a & 0x80) != 0;
+                self.a <<= 1;
+                self.set_flag(Flag::Carry, msb);
+                self.update_status(self.a);
+            } else {
+                let address = self.read_address(i.mode);
+                self.shift_left(address);
+            }
         }
 
         // todo: more opcodes
@@ -381,17 +507,50 @@ impl CPU {
             self.y = self.read_value(i.mode);
             self.update_status(self.y);
         }
-
-        /*
-
-        Note that the SBC instruction normally can utilize binary-coded decimal,
-            but the decimal flag is not functional on the NES
-        As such, these instructions never utilize BCD
-
-        The carry flag is always used in subtraction - there is no way to subtract without carry
-
-
-        */
+        else if i.mnemonic == instruction::Mnemonic::LSR {
+            // Logical shift right
+            // the accumulator may be used
+            if i.mode == instruction::AddressingMode::Accumulator {
+                let lsb = (self.a & 0x01) != 0;
+                self.a >>= 1;
+                self.set_flag(Flag::Carry, lsb);
+                self.update_status(self.a);
+            } else {
+                let address = self.read_address(i.mode);
+                self.shift_right(address);
+            }
+        }
+        else if opcode == 0xea {
+            // NOP
+            // do nothing
+        }
+        else if i.mnemonic == instruction::Mnemonic::ROL {
+            // rotate left
+            // The accumulator may be used as an argument
+            if i.mode == instruction::AddressingMode::Accumulator {
+                let c = self.is_set(Flag::Carry);
+                self.set_flag(Flag::Carry, self.a & 0x80 != 0);  // if the MSB is set, set the carry bit
+                self.a <<= 1;
+                self.a |= c as u8;
+                self.update_status(self.a);
+            } else {
+                let address = self.read_address(i.mode);
+                self.rotate_left(address);
+            }
+        }
+        else if i.mnemonic == instruction::Mnemonic::ROR {
+            // rotate right
+            if i.mode == instruction::AddressingMode::Accumulator {
+                let c = self.is_set(Flag::Carry);
+                self.set_flag(Flag::Carry, self.a & 0x01 != 0);  // if the MSB is set, set the carry bit
+                self.a >>= 1;
+                self.a |= if c { 0x80 } else { 0 };
+                self.update_status(self.a);
+            } else {
+                let address = self.read_address(i.mode);
+                self.rotate_right(address);
+            }
+        }
         else if i.mnemonic == instruction::Mnemonic::SBC {
             // SBC, Imm
             self.sbc(i.mode);
@@ -435,7 +594,16 @@ impl CPU {
             // STY
             self.store(self.y, i.mode);
         }
+
+        // todo: 'unofficial' opcodes
+
+        else {
+            // Illegal instruction; stop the CPU
+            self.running = false;
+        }
     }
+
+    // todo: in the routine that runs the cpu, check to make sure it is still marked as 'running'
 
     /// Steps the processor, executing an instruction
     pub fn step(&mut self) {
@@ -457,6 +625,7 @@ impl CPU {
         self.pc = RESET_VECTOR;
         let start_address: u16 = self.read_absolute_address();
         self.pc = start_address;
+        self.running = true;
 
         // todo: additional start routines
     }
