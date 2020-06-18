@@ -712,9 +712,44 @@ impl CPU {
                     // NOP
                     // do nothing
                 },
-
-                // todo: ORA to ROL
-
+                instruction::Mnemonic::ORA => {
+                    // Bitwise OR with accumulator
+                    let value = self.read_value(i.mode);
+                    self.a |= value;
+                    self.update_status(self.a);
+                },
+                instruction::Mnemonic::TAX => {
+                    self.x = self.a;
+                    self.update_status(self.x);
+                },
+                instruction::Mnemonic::TXA => {
+                    self.a = self.x;
+                    self.update_status(self.a);
+                },
+                instruction::Mnemonic::DEX => {
+                    self.x -= 1;
+                    self.update_status(self.x);
+                },
+                instruction::Mnemonic::INX => {
+                    self.x += 1;
+                    self.update_status(self.x);
+                },
+                instruction::Mnemonic::TAY => {
+                    self.y = self.a;
+                    self.update_status(self.y);
+                },
+                instruction::Mnemonic::TYA => {
+                    self.a = self.y;
+                    self.update_status(self.a);
+                },
+                instruction::Mnemonic::DEY => {
+                    self.y -= 1;
+                    self.update_status(self.y);
+                },
+                instruction::Mnemonic::INY => {
+                    self.y += 1;
+                    self.update_status(self.y);
+                },
                 instruction::Mnemonic::ROL => {
                     // rotate left
                     // The accumulator may be used as an argument
