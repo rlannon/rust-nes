@@ -137,6 +137,7 @@ impl CPU {
         // Get the value
         if mode == instruction::AddressingMode::Immediate {
             value = self.memory[self.pc as usize];
+            self.pc += 1;
         }
         else if
             mode == instruction::AddressingMode::Zero ||
@@ -220,11 +221,12 @@ impl CPU {
     }
 
     /// Reads a value from memory and returns the appropriate zero page address based on the addressing mode.
-    fn read_zp_address(&self, mode: instruction::AddressingMode) -> u16 {
+    fn read_zp_address(&mut self, mode: instruction::AddressingMode) -> u16 {
         let address = self.memory[self.pc as usize] +
             if mode == instruction::AddressingMode::ZeroX { self.x } 
             else if mode == instruction::AddressingMode::ZeroY { self.y } 
             else { 0 };
+        self.pc += 1;
         return address as u16;
     }
 
@@ -234,7 +236,7 @@ impl CPU {
         let address =
             (self.memory[self.pc as usize] as u16) |
             ((self.memory[(self.pc + 1) as usize] as u16) << 8);
-        self.pc += 1;
+        self.pc += 2;   // Skip the bytes of the address
         return address;
     }
 
@@ -265,6 +267,9 @@ impl CPU {
             as usize
         ];
 
+        // increment the PC
+        self.pc += 1;
+
         // return the address
         return (addr_high as u16) << 8 | addr_low as u16;
     }
@@ -272,7 +277,7 @@ impl CPU {
     /// Gets the address for the indirect indexed (indirect Y) addressing mode
     /// Reads one byte, giving the address in the zero page where the pointer is stored; the little-endian 16-bit address is then read and returned
     /// Since indirect indexed can only be used with the Y register, we don't need an offset
-    fn read_indirect_indexed_address(&self) -> u16 {
+    fn read_indirect_indexed_address(&mut self) -> u16 {
         let zp_address: u8 = self.memory[self.pc as usize];
         let mut address: u16 = 
             (self.memory[zp_address as usize] as u16) |
@@ -280,16 +285,20 @@ impl CPU {
         ;
         address += self.y as u16;
 
+        // increment the PC
+        self.pc += 1;
+
         address
     }
 
     /// Gets the indexed indirect address (indirect X)
     /// Like indirect indexed, indexed indirect can only be used with the X register -- so we don't need an offset
-    fn read_indexed_indirect_address(&self) -> u16 {
+    fn read_indexed_indirect_address(&mut self) -> u16 {
         let zp_address: u8 = self.memory[self.pc as usize] + self.x;
         let address: u16 =
             (self.memory[zp_address as usize] as u16) |
             ((self.memory[(zp_address + 1) as usize] as u16) << 8);
+        self.pc += 1;   // increment the PC
         address
     }
 
@@ -454,6 +463,62 @@ impl CPU {
         self.update_status(self.memory[address as usize]);
     }
 
+    /// Branches according to data in memory
+    fn branch(&mut self, condition: bool) {
+        if condition {
+            let offset = self.memory[self.pc as usize] as i8;   // offset is signed
+            if offset < 0 {
+                self.pc -= (offset as i16).abs() as u16;
+            }
+            else {
+                self.pc += offset as u16;
+            }
+        }
+        else {
+            self.pc += 1;
+        }
+    }
+
+    /// The interrupt entry routine
+    /// Interrupts occur as follows in 65xx processors:
+    /// * The instruction updates memory and registers as necessary (prior to this function)
+    /// * MSB of the PC is pushed
+    /// * LSB of the PC is pushed
+    /// * Status is pushed
+    /// * The `I` flag is set
+    /// * The PC is loaded with the value from the vector
+    fn interrupt(&mut self) {
+        self.push((self.pc >> 8 & 0xFF) as u8); // push MSB
+        self.push((self.pc & 0xFF) as u8);  // push LSB
+        self.push(self.status);
+        self.set_flag(Flag::Interrupt, true);
+        let address = (self.memory[IRQ_VECTOR as usize] as u16) & ((self.memory[(IRQ_VECTOR + 1) as usize] as u16) << 8);
+        self.pc = address;
+    }
+
+    /// Transfers control to the given subroutine
+    /// * Fetches the address to which we are transfering control
+    /// * Figure out the return address, which is the address of the next instruction to be executed
+    /// * Push MSB of the return address
+    /// * Push LSB of the return address
+    fn jsr(&mut self) {
+        let new_address = self.read_absolute_address(); // get the new address
+        let return_address = self.pc - 1;   // get the return address
+        self.push((return_address >> 8 & 0xFF) as u8); // MSB
+        self.push((return_address & 0xFF) as u8);  // LSB
+        self.pc = new_address;
+    }
+
+    /// Returns from an interrupt or subroutine
+    /// Reads two bytes from the stack (LSB then MSB) and returns to that address
+    /// Note that if `is_subroutine` is set, returns to the address + 1; else, returns to the exact address
+    fn ret(&mut self, is_subroutine: bool) {
+        let lsb = self.pop();
+        let msb = self.pop();
+        let address = (((msb as u16) << 8) & lsb as u16) + if is_subroutine { 1 } else { 0 };
+        self.pc = address;
+    }
+
     /// Executes the instruction supplied; reads from memory appropriately
     fn execute_instruction(&mut self, opcode: u8) {
         // get the instruction based on its opcode
@@ -496,16 +561,50 @@ impl CPU {
                     self.set_flag(Flag::Negative, (self.memory[address as usize] & N_FLAG) != 0);
                     self.set_flag(Flag::Overflow, (self.memory[address as usize] & V_FLAG) != 0);
                 },
+
+                // Branches
                 instruction::Mnemonic::BPL => {
                     // Branch on plus (N = 0)
-                    let offset = self.memory[self.pc as usize] as i8;   // offset is signed
-                    if offset < 0 {
-                        self.pc -= (offset as i16).abs() as u16;
-                    }
-                    else {
-                        self.pc += offset as u16;
-                    }
+                    self.branch(!self.is_set(Flag::Negative));
                 },
+                instruction::Mnemonic::BMI => {
+                    // Branch on minus (N = 1)
+                    self.branch(self.is_set(Flag::Negative));
+                },
+                instruction::Mnemonic::BVC => {
+                    // Branch on overflow clear
+                    self.branch(!self.is_set(Flag::Overflow));
+                },
+                instruction::Mnemonic::BVS => {
+                    // Branch on overflow set
+                    self.branch(self.is_set(Flag::Overflow));
+                },
+                instruction::Mnemonic::BCC => {
+                    // Branch on carry clear
+                    self.branch(!self.is_set(Flag::Carry));
+                },
+                instruction::Mnemonic::BCS => {
+                    // Branch on carry set
+                    self.branch(self.is_set(Flag::Carry));
+                },
+                instruction::Mnemonic::BNE => {
+                    // Branch on not equal (Z = 0)
+                    self.branch(!self.is_set(Flag::Zero));
+                },
+                instruction::Mnemonic::BEQ => {
+                    // Branch on equal (Z = 1)
+                    self.branch(self.is_set(Flag::Zero));
+                },
+                instruction::Mnemonic::BRK => {
+                    // BRK sets the B flag and increments the pc by one
+                    // Also causes a non-maskable interrupt
+                    self.set_flag(Flag::B, true);
+                    self.pc += 1;
+                    self.interrupt();
+                },
+
+                // todo: more instructions
+
                 instruction::Mnemonic::JMP => {
                     // JMP has two addressing modes
                     if i.mode == instruction::AddressingMode::Absolute {
@@ -514,6 +613,10 @@ impl CPU {
                     else {
                         self.pc = self.read_indirect_address();
                     }
+                },
+                instruction::Mnemonic::JSR => {
+                    // Jump to subroutine
+                    self.jsr();
                 },
                 instruction::Mnemonic::LDA => {
                     // LDA
@@ -573,6 +676,14 @@ impl CPU {
                         let address = self.read_address(i.mode);
                         self.rotate_right(address);
                     }
+                },
+                instruction::Mnemonic::RTI => {
+                    // Return from interrupt
+                    self.ret(false);
+                },
+                instruction::Mnemonic::RTS => {
+                    // Return from subroutine
+                    self.ret(true);
                 },
                 instruction::Mnemonic::SBC => {
                     // SBC, Imm
