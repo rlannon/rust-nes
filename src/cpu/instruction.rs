@@ -38,6 +38,7 @@ pub struct Instruction {
     pub time: u8,
 }
 
+// todo: maintain this in a CSV and load that way?
 // todo: unofficial/illegal opcodes
 pub static INSTRUCTIONS: phf::Map<u8, Instruction> = phf_map! {
     // ADC

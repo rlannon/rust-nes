@@ -15,6 +15,11 @@ pub const NMI_VECTOR: u16 = 0xfffa;
 pub const RESET_VECTOR: u16 = 0xfffc;
 pub const IRQ_VECTOR: u16 = 0xfffe;
 
+/// The NTSC version of the NES had a clock speed of 1.79 MHz, but differed from PAL
+pub const NTSC_SPEED: u32 = 1790000;
+/// The PAL version of the NES had a clock speed of 1.66 MHz
+pub const PAL_SPEED: u32 = 1660000;
+
 // Constants for our flag positions
 const N_FLAG: u8 = 0b10000000;
 const V_FLAG: u8 = 0b01000000;
@@ -541,6 +546,9 @@ impl CPU {
             // if the instruction does exist, we can look it up
             let i: &instruction::Instruction = &instruction::INSTRUCTIONS[&opcode];
 
+            // add the number of cycles to the total
+            self.cycles += i.time as u64;
+
             // use a match statement instead of if/else if/else
             match i.mnemonic {
                 instruction::Mnemonic::ADC => {
@@ -834,8 +842,20 @@ impl CPU {
 
     // todo: in the routine that runs the cpu, check to make sure it is still marked as 'running'
 
+    /// Returns whether or not the CPU is executing code
     pub fn running(&self) -> bool {
-        return self.running;
+        self.running
+    }
+
+    /// Returns the number of cycles that have passed
+    pub fn cycle_count(&self) -> u64 {
+        self.cycles
+    }
+
+    /// Resets the cycle count
+    /// The purpose of the cycle count is to maintain an accurate emulation speed
+    pub fn reset_cycle_count(&mut self) {
+        self.cycles = 0;
     }
 
     /// Steps the processor, executing an instruction
@@ -848,6 +868,24 @@ impl CPU {
         self.execute_instruction(instruction);
 
         // todo: each instruction should increment the pc accordingly
+    }
+
+    /// Prints information about CPU internals
+    pub fn print_cpu_information(&self) {
+        println!("Registers:");
+        println!("A: {}, X: {}, Y: {}", self.a, self.x, self.y);
+        println!("PC: {}, SP: {}", self.pc, self.sp);
+        println!("N V B - D I Z C");
+        println!(
+            "{} {} {} - {} {} {} {}",
+            self.is_set(Flag::Negative) as u8,
+            self.is_set(Flag::Overflow) as u8,
+            self.is_set(Flag::B) as u8,
+            self.is_set(Flag::Decimal) as u8,
+            self.is_set(Flag::Interrupt) as u8,
+            self.is_set(Flag::Zero) as u8,
+            self.is_set(Flag::Carry) as u8
+        );
     }
 
     /// Resets the CPU, leaving it in a ready state
