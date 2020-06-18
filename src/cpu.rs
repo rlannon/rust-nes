@@ -519,6 +519,17 @@ impl CPU {
         self.pc = address;
     }
 
+    /// Compares two values and sets the status register appropriately.
+    /// Generally, these comparisons result in the following:
+    /// * `Z` set if values are equal, cleared if unequal
+    /// * `C` set if left is greater or equal to the right value, else it is cleared
+    /// * `N` set based on the sign of the left value
+    fn compare(&mut self, left: u8, right: u8) {
+        self.set_flag(Flag::Zero, left == right);
+        self.set_flag(Flag::Carry, left >= right);
+        self.set_flag(Flag::Negative, left >= 0x80);
+    }
+
     /// Executes the instruction supplied; reads from memory appropriately
     fn execute_instruction(&mut self, opcode: u8) {
         // get the instruction based on its opcode
@@ -602,9 +613,60 @@ impl CPU {
                     self.pc += 1;
                     self.interrupt();
                 },
-
-                // todo: more instructions
-
+                instruction::Mnemonic::CMP => {
+                    // Compare accumulator
+                    let rhs = self.read_value(i.mode);
+                    self.compare(self.a, rhs);
+                },
+                instruction::Mnemonic::CPX => {
+                    // Compare X
+                    let rhs = self.read_value(i.mode);
+                    self.compare(self.x, rhs);
+                },
+                instruction::Mnemonic::CPY => {
+                    // Compare Y
+                    let rhs = self.read_value(i.mode);
+                    self.compare(self.y, rhs);
+                },
+                instruction::Mnemonic::DEC => {
+                    // Decrement memory
+                    let address = self.read_address(i.mode);
+                    self.memory[address as usize] -= 1;
+                    self.update_status(self.memory[address as usize]);
+                },
+                instruction::Mnemonic::EOR => {
+                    // XOR with accumulator
+                    let value = self.read_value(i.mode);
+                    self.a ^= value;
+                    self.update_status(self.a);
+                },
+                instruction::Mnemonic::CLC => {
+                    self.set_flag(Flag::Carry, false);
+                },
+                instruction::Mnemonic::SEC => {
+                    self.set_flag(Flag::Carry, true);
+                },
+                instruction::Mnemonic::CLI => {
+                    self.set_flag(Flag::Interrupt, false);
+                },
+                instruction::Mnemonic::SEI => {
+                    self.set_flag(Flag::Interrupt, true);
+                },
+                instruction::Mnemonic::CLV => {
+                    self.set_flag(Flag::Overflow, false);
+                },
+                instruction::Mnemonic::CLD => {
+                    self.set_flag(Flag::Decimal, false);
+                },
+                instruction::Mnemonic::SED => {
+                    self.set_flag(Flag::Decimal, true);
+                },
+                instruction::Mnemonic::INC => {
+                    // Increment memory
+                    let address = self.read_address(i.mode);
+                    self.memory[address as usize] += 1;
+                    self.update_status(self.memory[address as usize]);
+                },
                 instruction::Mnemonic::JMP => {
                     // JMP has two addressing modes
                     if i.mode == instruction::AddressingMode::Absolute {
@@ -650,6 +712,9 @@ impl CPU {
                     // NOP
                     // do nothing
                 },
+
+                // todo: ORA to ROL
+
                 instruction::Mnemonic::ROL => {
                     // rotate left
                     // The accumulator may be used as an argument
