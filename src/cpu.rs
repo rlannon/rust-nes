@@ -11,9 +11,9 @@ const STACK_PAGE: u8 = 0x01;
 /// * the reset vector, located at `0xFFFC - 0xFFFD`;
 /// * the IRQ vector, located `0xFFFE - 0xFFFF`
 /// Since these are hard-coded, we can use named constants for them.
-const NMI_VECTOR: u16 = 0xfffa;
-const RESET_VECTOR: u16 = 0xfffc;
-const IRQ_VECTOR: u16 = 0xfffe;
+pub const NMI_VECTOR: u16 = 0xfffa;
+pub const RESET_VECTOR: u16 = 0xfffc;
+pub const IRQ_VECTOR: u16 = 0xfffe;
 
 // Constants for our flag positions
 const N_FLAG: u8 = 0b10000000;
@@ -52,7 +52,7 @@ pub struct CPU {
     y: u8,
 
     // processor memory
-    memory: [u8; 65536],
+    pub memory: [u8; 65536],
 }
 
 impl Default for CPU {
@@ -828,16 +828,15 @@ impl CPU {
                     // STY
                     self.store(self.y, i.mode);
                 },
-                _ => {
-                    // illegal instruction; stop execution
-                    // note these should really be caught earlier
-                    self.running = false;
-                },
             };
         }
     }
 
     // todo: in the routine that runs the cpu, check to make sure it is still marked as 'running'
+
+    pub fn running(&self) -> bool {
+        return self.running;
+    }
 
     /// Steps the processor, executing an instruction
     pub fn step(&mut self) {
