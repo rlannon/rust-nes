@@ -644,20 +644,215 @@ pub static INSTRUCTIONS: phf::Map<u8, Instruction> = phf_map! {
     },
 
     // ROL
+    0x2au8 => Instruction{
+        opcode: 0x2a,
+        mnemonic: Mnemonic::ROL,
+        mode: AddressingMode::Accumulator,
+    },
+    0x26u8 => Instruction{
+        opcode: 0x26,
+        mnemonic: Mnemonic::ROL,
+        mode: AddressingMode::Zero,
+    },
+    0x36u8 => Instruction{
+        opcode: 0x36,
+        mnemonic: Mnemonic::ROL,
+        mode: AddressingMode::ZeroX,
+    },
+    0x2eu8 => Instruction{
+        opcode: 0x2e,
+        mnemonic: Mnemonic::ROL,
+        mode: AddressingMode::Absolute,
+    },
+    0x3eu8 => Instruction{
+        opcode: 0x3e,
+        mnemonic: Mnemonic::ROL,
+        mode: AddressingMode::AbsoluteX,
+    },
 
     // ROR
+    0x6au8 => Instruction{
+        opcode: 0x6a,
+        mnemonic: Mnemonic::ROR,
+        mode: AddressingMode::Accumulator,
+    },
+    0x66u8 => Instruction{
+        opcode: 0x66,
+        mnemonic: Mnemonic::ROR,
+        mode: AddressingMode::Zero,
+    },
+    0x76u8 => Instruction{
+        opcode: 0x76,
+        mnemonic: Mnemonic::ROR,
+        mode: AddressingMode::ZeroX,
+    },
+    0x6eu8 => Instruction{
+        opcode: 0x6e,
+        mnemonic: Mnemonic::ROR,
+        mode: AddressingMode::Absolute,
+    },
+    0x7eu8 => Instruction{
+        opcode: 0x7e,
+        mnemonic: Mnemonic::ROR,
+        mode: AddressingMode::AbsoluteX,
+    },
 
     // RTI
+    0x40u8 => Instruction{
+        opcode: 0x40,
+        mnemonic: Mnemonic::RTI,
+        mode: AddressingMode::Implied,
+    },
 
     // RTS
+    0x60u8 => Instruction{
+        opcode: 0x60,
+        mnemonic: Mnemonic::RTS,
+        mode: AddressingMode::Implied,
+    },
 
     // SBC
+    0xe9u8 => Instruction{
+        opcode: 0xe9,
+        mnemonic: Mnemonic::SBC,
+        mode: AddressingMode::Immediate,
+    },
+    0xe5u8 => Instruction{
+        opcode: 0xe5,
+        mnemonic: Mnemonic::SBC,
+        mode: AddressingMode::Zero,
+    },
+    0xf5u8 => Instruction{
+        opcode: 0xf5,
+        mnemonic: Mnemonic::SBC,
+        mode: AddressingMode::ZeroX,
+    },
+    0xedu8 => Instruction{
+        opcode: 0xed,
+        mnemonic: Mnemonic::SBC,
+        mode: AddressingMode::Absolute,
+    },
+    0xfdu8 => Instruction{
+        opcode: 0xfd,
+        mnemonic: Mnemonic::SBC,
+        mode: AddressingMode::AbsoluteX,
+    },
+    0xf9u8 => Instruction{
+        opcode: 0xf9,
+        mnemonic: Mnemonic::SBC,
+        mode: AddressingMode::AbsoluteY,
+    },
+    0xe1u8 => Instruction{
+        opcode: 0xe1,
+        mnemonic: Mnemonic::SBC,
+        mode: AddressingMode::IndirectX,
+    },
+    0xf1u8 => Instruction{
+        opcode: 0xf1,
+        mnemonic: Mnemonic::SBC,
+        mode: AddressingMode::IndirectY,
+    },
 
     // STA
+    0x85u8 => Instruction{
+        opcode: 0x85,
+        mnemonic: Mnemonic::STA,
+        mode: AddressingMode::Zero,
+    },
+    0x95u8 => Instruction{
+        opcode: 0x95,
+        mnemonic: Mnemonic::STA,
+        mode: AddressingMode::ZeroX,
+    },
+    0x8du8 => Instruction{
+        opcode: 0x8d,
+        mnemonic: Mnemonic::STA,
+        mode: AddressingMode::Absolute,
+    },
+    0x9du8 => Instruction{
+        opcode: 0x9d,
+        mnemonic: Mnemonic::STA,
+        mode: AddressingMode::AbsoluteX,
+    },
+    0x99u8 => Instruction{
+        opcode: 0x99,
+        mnemonic: Mnemonic::STA,
+        mode: AddressingMode::AbsoluteY,
+    },
+    0x81u8 => Instruction{
+        opcode: 0x81,
+        mnemonic: Mnemonic::STA,
+        mode: AddressingMode::IndirectX,
+    },
+    0x91u8 => Instruction{
+        opcode: 0x91,
+        mnemonic: Mnemonic::STA,
+        mode: AddressingMode::IndirectY,
+    },
 
     // Stack instructions
+    0x9au8 => Instruction{
+        opcode: 0x9a,
+        mnemonic: Mnemonic::TXS,
+        mode: AddressingMode::Implied,
+    },
+    0xbau8 => Instruction{
+        opcode: 0xba,
+        mnemonic: Mnemonic::TSX,
+        mode: AddressingMode::Implied,
+    },
+    0x48u8 => Instruction{
+        opcode: 0x48,
+        mnemonic: Mnemonic::PHA,
+        mode: AddressingMode::Implied,
+    },
+    0x68u8 => Instruction{
+        opcode: 0x68,
+        mnemonic: Mnemonic::PLA,
+        mode: AddressingMode::Implied,
+    },
+    0x08u8 => Instruction{
+        opcode: 0x08,
+        mnemonic: Mnemonic::PHP,
+        mode: AddressingMode::Implied,
+    },
+    0x28u8 => Instruction{
+        opcode: 0x28,
+        mnemonic: Mnemonic::PLP,
+        mode: AddressingMode::Implied,
+    },
 
     // STX
+    0x86u8 => Instruction{
+        opcode: 0x86,
+        mnemonic: Mnemonic::STX,
+        mode: AddressingMode::Zero,
+    },
+    0x96u8 => Instruction{
+        opcode: 0x96,
+        mnemonic: Mnemonic::STX,
+        mode: AddressingMode::ZeroY,
+    },
+    0x8eu8 => Instruction{
+        opcode: 0x8e,
+        mnemonic: Mnemonic::STX,
+        mode: AddressingMode::Absolute,
+    },
 
     // STY
+    0x84u8 => Instruction{
+        opcode: 0x84,
+        mnemonic: Mnemonic::STY,
+        mode: AddressingMode::Zero,
+    },
+    0x94u8 => Instruction{
+        opcode: 0x94,
+        mnemonic: Mnemonic::STY,
+        mode: AddressingMode::ZeroX,
+    },
+    0x8cu8 => Instruction{
+        opcode: 0x8c,
+        mnemonic: Mnemonic::STY,
+        mode: AddressingMode::Absolute,
+    },
 };
