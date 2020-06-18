@@ -456,168 +456,173 @@ impl CPU {
 
     /// Executes the instruction supplied; reads from memory appropriately
     fn execute_instruction(&mut self, opcode: u8) {
-        // todo: this can be optimized with a few getter functions and instruction lookups
-
-        let i: &instruction::Instruction = &instruction::INSTRUCTIONS[&opcode];
-
-        if i.mnemonic == instruction::Mnemonic::ADC {
-            // Add with carry
-            self.adc(i.mode);
-        }
-        else if i.mnemonic == instruction::Mnemonic::AND {
-            // Logical AND with accumulator
-            self.and(i.mode);
-        }
-        else if i.mnemonic == instruction::Mnemonic::ASL {
-            // Arithmetic shift left
-            // this instruction can operate on the accumulator
-            if i.mode == instruction::AddressingMode::Accumulator {
-                let msb = (self.a & 0x80) != 0;
-                self.a <<= 1;
-                self.set_flag(Flag::Carry, msb);
-                self.update_status(self.a);
-            } else {
-                let address = self.read_address(i.mode);
-                self.shift_left(address);
-            }
-        }
-        else if i.mnemonic == instruction::Mnemonic::BIT {
-            // Test bits
-            // Sets the Z flag as if A and [operand] were ANDed together; sets N and V to bits 7 and 6 of the operand, respecitvely.
-            let address = self.read_address(i.mode);
-            self.set_flag(Flag::Zero, (self.a & self.memory[address as usize]) != 0);
-            self.set_flag(Flag::Negative, (self.memory[address as usize] & N_FLAG) != 0);
-            self.set_flag(Flag::Overflow, (self.memory[address as usize] & V_FLAG) != 0);
-        }
-        else if i.mnemonic == instruction::Mnemonic::BPL {
-            // Branch on plus (N = 0)
-            let offset = self.memory[self.pc as usize] as i8;   // offset is signed
-            if offset < 0 {
-                self.pc -= (offset as i16).abs() as u16;
-            }
-            else {
-                self.pc += offset as u16;
-            }
-        }
-
-        // todo: more opcodes
-
-        else if opcode == 0x4c {
-            // JMP - Absolute
-            self.pc = self.read_absolute_address();
-        }
-        else if opcode == 0x6c {
-            // JMP - Indirect
-            self.pc = self.read_indirect_address();
-        }
-        else if i.mnemonic == instruction::Mnemonic::LDA {
-            // LDA
-            self.a = self.read_value(i.mode);
-            self.update_status(self.a);
-        }
-        else if i.mnemonic == instruction::Mnemonic::LDX {
-            // LDX
-            self.x = self.read_value(i.mode);
-            self.update_status(self.x);
-        }
-        else if i.mnemonic == instruction::Mnemonic::LDY {
-            // LDY
-            self.y = self.read_value(i.mode);
-            self.update_status(self.y);
-        }
-        else if i.mnemonic == instruction::Mnemonic::LSR {
-            // Logical shift right
-            // the accumulator may be used
-            if i.mode == instruction::AddressingMode::Accumulator {
-                let lsb = (self.a & 0x01) != 0;
-                self.a >>= 1;
-                self.set_flag(Flag::Carry, lsb);
-                self.update_status(self.a);
-            } else {
-                let address = self.read_address(i.mode);
-                self.shift_right(address);
-            }
-        }
-        else if opcode == 0xea {
-            // NOP
-            // do nothing
-        }
-        else if i.mnemonic == instruction::Mnemonic::ROL {
-            // rotate left
-            // The accumulator may be used as an argument
-            if i.mode == instruction::AddressingMode::Accumulator {
-                let c = self.is_set(Flag::Carry);
-                self.set_flag(Flag::Carry, self.a & 0x80 != 0);  // if the MSB is set, set the carry bit
-                self.a <<= 1;
-                self.a |= c as u8;
-                self.update_status(self.a);
-            } else {
-                let address = self.read_address(i.mode);
-                self.rotate_left(address);
-            }
-        }
-        else if i.mnemonic == instruction::Mnemonic::ROR {
-            // rotate right
-            if i.mode == instruction::AddressingMode::Accumulator {
-                let c = self.is_set(Flag::Carry);
-                self.set_flag(Flag::Carry, self.a & 0x01 != 0);  // if the MSB is set, set the carry bit
-                self.a >>= 1;
-                self.a |= if c { 0x80 } else { 0 };
-                self.update_status(self.a);
-            } else {
-                let address = self.read_address(i.mode);
-                self.rotate_right(address);
-            }
-        }
-        else if i.mnemonic == instruction::Mnemonic::SBC {
-            // SBC, Imm
-            self.sbc(i.mode);
-        }
-        else if i.mnemonic == instruction::Mnemonic::STA {
-            // STA - ZP
-            self.store(self.a, i.mode);
-        }
-        else if opcode == 0x9a {
-            // TXS
-            self.sp = self.x;
-            self.update_status(self.sp);
-        }
-        else if opcode == 0xba {
-            // TSX
-            self.x = self.sp;
-            self.update_status(self.x);
-        }
-        else if opcode == 0x48 {
-            // PHA
-            self.push(self.a);
-        }
-        else if opcode == 0x68 {
-            // PLA
-            self.a = self.pop();
-            self.update_status(self.a);
-        }
-        else if opcode == 0x08 {
-            // PHP
-            self.push(self.status);
-        }
-        else if opcode == 0x28 {
-            // PLP
-            self.status = self.pop();
-        }
-        else if i.mnemonic == instruction::Mnemonic::STX {
-            // STX
-            self.store(self.x, i.mode);
-        }
-        else if i.mnemonic == instruction::Mnemonic::STY {
-            // STY
-            self.store(self.y, i.mode);
-        }
-
-        // todo: 'unofficial' opcodes
-
-        else {
-            // Illegal instruction; stop the CPU
+        // get the instruction based on its opcode
+        if !instruction::INSTRUCTIONS.contains_key(&opcode) {
+            // if the instruction isn't in the table, stop the CPU (illegal)
             self.running = false;
+        }
+        else {
+            // if the instruction does exist, we can look it up
+            let i: &instruction::Instruction = &instruction::INSTRUCTIONS[&opcode];
+
+            // use a match statement instead of if/else if/else
+            match i.mnemonic {
+                instruction::Mnemonic::ADC => {
+                    // Add with carry
+                    self.adc(i.mode);
+                },
+                instruction::Mnemonic::AND => {
+                    // Logical AND with accumulator
+                    self.and(i.mode);
+                },
+                instruction::Mnemonic::ASL => {
+                    // Arithmetic shift left
+                    // this instruction can operate on the accumulator
+                    if i.mode == instruction::AddressingMode::Accumulator {
+                        let msb = (self.a & 0x80) != 0;
+                        self.a <<= 1;
+                        self.set_flag(Flag::Carry, msb);
+                        self.update_status(self.a);
+                    } else {
+                        let address = self.read_address(i.mode);
+                        self.shift_left(address);
+                    }
+                },
+                instruction::Mnemonic::BIT => {
+                    // Test bits
+                    // Sets the Z flag as if A and [operand] were ANDed together; sets N and V to bits 7 and 6 of the operand, respecitvely.
+                    let address = self.read_address(i.mode);
+                    self.set_flag(Flag::Zero, (self.a & self.memory[address as usize]) != 0);
+                    self.set_flag(Flag::Negative, (self.memory[address as usize] & N_FLAG) != 0);
+                    self.set_flag(Flag::Overflow, (self.memory[address as usize] & V_FLAG) != 0);
+                },
+                instruction::Mnemonic::BPL => {
+                    // Branch on plus (N = 0)
+                    let offset = self.memory[self.pc as usize] as i8;   // offset is signed
+                    if offset < 0 {
+                        self.pc -= (offset as i16).abs() as u16;
+                    }
+                    else {
+                        self.pc += offset as u16;
+                    }
+                },
+                instruction::Mnemonic::JMP => {
+                    // JMP has two addressing modes
+                    if i.mode == instruction::AddressingMode::Absolute {
+                        self.pc = self.read_absolute_address();
+                    }
+                    else {
+                        self.pc = self.read_indirect_address();
+                    }
+                },
+                instruction::Mnemonic::LDA => {
+                    // LDA
+                    self.a = self.read_value(i.mode);
+                    self.update_status(self.a);
+                },
+                instruction::Mnemonic::LDX => {
+                    // LDX
+                    self.x = self.read_value(i.mode);
+                    self.update_status(self.x);
+                },
+                instruction::Mnemonic::LDY => {
+                    // LDY
+                    self.y = self.read_value(i.mode);
+                    self.update_status(self.y);
+                },
+                instruction::Mnemonic::LSR => {
+                    // Logical shift right
+                    // the accumulator may be used
+                    if i.mode == instruction::AddressingMode::Accumulator {
+                        let lsb = (self.a & 0x01) != 0;
+                        self.a >>= 1;
+                        self.set_flag(Flag::Carry, lsb);
+                        self.update_status(self.a);
+                    } else {
+                        let address = self.read_address(i.mode);
+                        self.shift_right(address);
+                    }
+                },
+                instruction::Mnemonic::NOP => {
+                    // NOP
+                    // do nothing
+                },
+                instruction::Mnemonic::ROL => {
+                    // rotate left
+                    // The accumulator may be used as an argument
+                    if i.mode == instruction::AddressingMode::Accumulator {
+                        let c = self.is_set(Flag::Carry);
+                        self.set_flag(Flag::Carry, self.a & 0x80 != 0);  // if the MSB is set, set the carry bit
+                        self.a <<= 1;
+                        self.a |= c as u8;
+                        self.update_status(self.a);
+                    } else {
+                        let address = self.read_address(i.mode);
+                        self.rotate_left(address);
+                    }
+                },
+                instruction::Mnemonic::ROR => {
+                    // rotate right
+                    if i.mode == instruction::AddressingMode::Accumulator {
+                        let c = self.is_set(Flag::Carry);
+                        self.set_flag(Flag::Carry, self.a & 0x01 != 0);  // if the MSB is set, set the carry bit
+                        self.a >>= 1;
+                        self.a |= if c { 0x80 } else { 0 };
+                        self.update_status(self.a);
+                    } else {
+                        let address = self.read_address(i.mode);
+                        self.rotate_right(address);
+                    }
+                },
+                instruction::Mnemonic::SBC => {
+                    // SBC, Imm
+                    self.sbc(i.mode);
+                },
+                instruction::Mnemonic::STA => {
+                    // STA - ZP
+                    self.store(self.a, i.mode);
+                },
+                instruction::Mnemonic::TXS => {
+                    // TXS
+                    self.sp = self.x;
+                    self.update_status(self.sp);
+                },
+                instruction::Mnemonic::TSX => {
+                    // TSX
+                    self.x = self.sp;
+                    self.update_status(self.x);
+                },
+                instruction::Mnemonic::PHA => {
+                    // PHA
+                    self.push(self.a);
+                },
+                instruction::Mnemonic::PLA => {
+                    // PLA
+                    self.a = self.pop();
+                    self.update_status(self.a);
+                },
+                instruction::Mnemonic::PHP => {
+                    // PHP
+                    self.push(self.status);
+                },
+                instruction::Mnemonic::PLP => {
+                    // PLP
+                    self.status = self.pop();
+                },
+                instruction::Mnemonic::STX => {
+                    // STX
+                    self.store(self.x, i.mode);
+                },
+                instruction::Mnemonic::STY => {
+                    // STY
+                    self.store(self.y, i.mode);
+                },
+                _ => {
+                    // illegal instruction; stop execution
+                    // note these should really be caught earlier
+                    self.running = false;
+                },
+            };
         }
     }
 
