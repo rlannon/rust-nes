@@ -499,8 +499,58 @@ pub static INSTRUCTIONS: phf::Map<u8, Instruction> = phf_map! {
     },
 
     // LDY
+    0xa0u8 => Instruction{
+        opcode: 0xa0,
+        mnemonic: Mnemonic::LDY,
+        mode: AddressingMode::Immediate,
+    },
+    0xa4u8 => Instruction{
+        opcode: 0xa4,
+        mnemonic: Mnemonic::LDY,
+        mode: AddressingMode::Zero,
+    },
+    0xb4u8 => Instruction{
+        opcode: 0xb4,
+        mnemonic: Mnemonic::LDY,
+        mode: AddressingMode::ZeroX,
+    },
+    0xacu8 => Instruction{
+        opcode: 0xac,
+        mnemonic: Mnemonic::LDY,
+        mode: AddressingMode::Absolute,
+    },
+    0xbcu8 => Instruction{
+        opcode: 0xbc,
+        mnemonic: Mnemonic::LDY,
+        mode: AddressingMode::AbsoluteX,
+    },
 
     // LSR
+    0x4au8 => Instruction{
+        opcode: 0x4a,
+        mnemonic: Mnemonic::LSR,
+        mode: AddressingMode::Accumulator,
+    },
+    0x46u8 => Instruction{
+        opcode: 0x46,
+        mnemonic: Mnemonic::LSR,
+        mode: AddressingMode::Zero,
+    },
+    0x56u8 => Instruction{
+        opcode: 0x56,
+        mnemonic: Mnemonic::LSR,
+        mode: AddressingMode::ZeroX,
+    },
+    0x4eu8 => Instruction{
+        opcode: 0x4e,
+        mnemonic: Mnemonic::LSR,
+        mode: AddressingMode::Absolute,
+    },
+    0x5eu8 => Instruction{
+        opcode: 0x5e,
+        mnemonic: Mnemonic::LSR,
+        mode: AddressingMode::AbsoluteX,
+    },
 
     // NOP
     0xeau8 => Instruction{
@@ -510,8 +560,88 @@ pub static INSTRUCTIONS: phf::Map<u8, Instruction> = phf_map! {
     },
 
     // ORA
+    0x09u8 => Instruction{
+        opcode: 0x09,
+        mnemonic: Mnemonic::ORA,
+        mode: AddressingMode::Immediate,
+    },
+    0x05u8 => Instruction{
+        opcode: 0x05,
+        mnemonic: Mnemonic::ORA,
+        mode: AddressingMode::Zero,
+    },
+    0x15u8 => Instruction{
+        opcode: 0x15,
+        mnemonic: Mnemonic::ORA,
+        mode: AddressingMode::ZeroX,
+    },
+    0x0du8 => Instruction{
+        opcode: 0x0d,
+        mnemonic: Mnemonic::ORA,
+        mode: AddressingMode::Absolute,
+    },
+    0x1du8 => Instruction{
+        opcode: 0x1d,
+        mnemonic: Mnemonic::ORA,
+        mode: AddressingMode::AbsoluteX,
+    },
+    0x19u8 => Instruction{
+        opcode: 0x19,
+        mnemonic: Mnemonic::ORA,
+        mode: AddressingMode::AbsoluteY,
+    },
+    0x01u8 => Instruction{
+        opcode: 0x01,
+        mnemonic: Mnemonic::ORA,
+        mode: AddressingMode::IndirectX,
+    },
+    0x11u8 => Instruction{
+        opcode: 0x11,
+        mnemonic: Mnemonic::ORA,
+        mode: AddressingMode::IndirectY,
+    },
 
-    // Register transfer instructions
+    // Register instructions
+    0xaau8 => Instruction{
+        opcode: 0xaa,
+        mnemonic: Mnemonic::TAX,
+        mode: AddressingMode::Implied,
+    },
+    0x8au8 => Instruction{
+        opcode: 0x8a,
+        mnemonic: Mnemonic::TXA,
+        mode: AddressingMode::Implied,
+    },
+    0xcau8 => Instruction{
+        opcode: 0xca,
+        mnemonic: Mnemonic::DEX,
+        mode: AddressingMode::Implied,
+    },
+    0xe8u8 => Instruction{
+        opcode: 0xe8,
+        mnemonic: Mnemonic::INX,
+        mode: AddressingMode::Implied,
+    },
+    0xa8u8 => Instruction{
+        opcode: 0xa8,
+        mnemonic: Mnemonic::TAY,
+        mode: AddressingMode::Implied,
+    },
+    0x98u8 => Instruction{
+        opcode: 0x98,
+        mnemonic: Mnemonic::TYA,
+        mode: AddressingMode::Implied,
+    },
+    0x88u8 => Instruction{
+        opcode: 0x88,
+        mnemonic: Mnemonic::DEY,
+        mode: AddressingMode::Implied,
+    },
+    0xc8u8 => Instruction{
+        opcode: 0xc8,
+        mnemonic: Mnemonic::INY,
+        mode: AddressingMode::Implied,
+    },
 
     // ROL
 
