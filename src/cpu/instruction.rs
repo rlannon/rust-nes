@@ -37,6 +37,7 @@ pub struct Instruction {
     pub mode: AddressingMode,
 }
 
+// todo: unofficial/illegal opcodes
 pub static INSTRUCTIONS: phf::Map<u8, Instruction> = phf_map! {
     // ADC
     0x69u8 => Instruction{
@@ -429,8 +430,73 @@ pub static INSTRUCTIONS: phf::Map<u8, Instruction> = phf_map! {
     },
 
     // LDA
+    0xa9u8 => Instruction{
+        opcode: 0xa9,
+        mnemonic: Mnemonic::LDA,
+        mode: AddressingMode::Immediate,
+    },
+    0xa5u8 => Instruction{
+        opcode: 0xa5,
+        mnemonic: Mnemonic::LDA,
+        mode: AddressingMode::Zero,
+    },
+    0xb5u8 => Instruction{
+        opcode: 0xb5,
+        mnemonic: Mnemonic::LDA,
+        mode: AddressingMode::ZeroX,
+    },
+    0xadu8 => Instruction{
+        opcode: 0xad,
+        mnemonic: Mnemonic::LDA,
+        mode: AddressingMode::Absolute,
+    },
+    0xbdu8 => Instruction{
+        opcode: 0xbd,
+        mnemonic: Mnemonic::LDA,
+        mode: AddressingMode::AbsoluteX,
+    },
+    0xb9u8 => Instruction{
+        opcode: 0xb9,
+        mnemonic: Mnemonic::LDA,
+        mode: AddressingMode::AbsoluteY,
+    },
+    0xa1u8 => Instruction{
+        opcode: 0xa1,
+        mnemonic: Mnemonic::LDA,
+        mode: AddressingMode::IndirectX,
+    },
+    0xb1u8 => Instruction{
+        opcode: 0xb1,
+        mnemonic: Mnemonic::LDA,
+        mode: AddressingMode::IndirectY,
+    },
 
     // LDX
+    0xa2u8 => Instruction{
+        opcode: 0xa2,
+        mnemonic: Mnemonic::LDX,
+        mode: AddressingMode::Immediate,
+    },
+    0xa6u8 => Instruction{
+        opcode: 0xa6,
+        mnemonic: Mnemonic::LDX,
+        mode: AddressingMode::Zero,
+    },
+    0xb6u8 => Instruction{
+        opcode: 0xb6,
+        mnemonic: Mnemonic::LDX,
+        mode: AddressingMode::ZeroY,
+    },
+    0xaeu8 => Instruction{
+        opcode: 0xae,
+        mnemonic: Mnemonic::LDX,
+        mode: AddressingMode::Absolute,
+    },
+    0xbeu8 => Instruction{
+        opcode: 0xbe,
+        mnemonic: Mnemonic::LDX,
+        mode: AddressingMode::AbsoluteY,
+    },
 
     // LDY
 
