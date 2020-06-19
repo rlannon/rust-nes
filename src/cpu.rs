@@ -351,7 +351,7 @@ impl CPU {
         let result = minuend - subtrahend as u16;
         self.set_flag(
             Flag::Carry, 
-            if result <= 0xff
+            result <= 0xff
         );
         if self.is_set(Flag::Overflow) {
             self.set_flag(Flag::Overflow, if result < 0x80 || result >= 0x180 { false } else { true });
