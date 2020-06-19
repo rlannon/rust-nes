@@ -314,22 +314,22 @@ impl CPU {
         self.memory[address as usize] = value;  // perform the assignment
     }
 
-    /// Push a value `value` onto the stack
-    /// Note this will increment the SP and *then* write the value
+    /// Push a value `value` onto the stack. Note the 6502's stack grows downwards.
+    /// The 6502 also uses an empty stack, meaning it writes the value and then modifies the SP to show the next empty space.
     /// It's also worth noting that the 6502 does not have overflow detection, so if the stack pointer wraps around, that's normal behavior for the processor
     fn push(&mut self, value: u8) {
-        self.sp = self.sp.overflowing_add(1).0;
         let address: u16 = ((STACK_PAGE as u16) << 8) | (self.sp as u16);
         self.memory[address as usize] = value;
+        self.sp = self.sp.overflowing_sub(1).0;
     }
 
-    /// Pop a value off the stack
-    /// This will read the value and then decrement the SP
+    /// Pop a value off the stack. Reminder the 6502's stack grows downwards.
+    /// This will increment the SP and then read a value (due to the 6502 using an empty stack).
     /// Keep in mind, as with the `push` function, the 6502 does not have stack underflow detection
     fn pop(&mut self) -> u8 {
+        self.sp = self.sp.overflowing_add(1).0;
         let address: u16 = ((STACK_PAGE as u16) << 8) | (self.sp as u16);
         let value = self.memory[address as usize];
-        self.sp = self.sp.overflowing_sub(1).0;
         return value;
     }
 
@@ -893,6 +893,7 @@ impl CPU {
         let start_address: u16 = self.read_absolute_address();
         self.pc = start_address;
         self.running = true;
+        self.sp = 0xFF;
 
         // todo: additional start routines
     }
