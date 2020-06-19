@@ -174,9 +174,8 @@ impl CPU {
         value
     }
 
-    /// Update the status register based on a given value
-    /// This only affects the Z and N flags
-    fn update_status(&mut self, value: u8) {
+    /// Update the Zero and Negative flags based on a given value.
+    fn update_zn(&mut self, value: u8) {
         if value == 0 {
             self.set_flag(Flag::Zero, true);
             self.set_flag(Flag::Negative, false);
@@ -356,7 +355,7 @@ impl CPU {
         if self.is_set(Flag::Overflow) {
             self.set_flag(Flag::Overflow, if result < 0x80 || result >= 0x180 { false } else { true });
         }
-        self.update_status(result as u8);
+        self.update_zn(result as u8);
 
         // finally, set A
         self.a = result as u8;
@@ -385,7 +384,7 @@ impl CPU {
         if self.is_set(Flag::Overflow) {
             self.set_flag(Flag::Overflow, if result < 0x80 || result >= 0x180 { false } else { true });
         }
-        self.update_status(result as u8);
+        self.update_zn(result as u8);
 
         // finally, set accumulator
         self.a = (result & 0xff) as u8;
@@ -395,7 +394,7 @@ impl CPU {
     fn and(&mut self, mode: instruction::AddressingMode) {
         let operand: u8 = self.read_value(mode);
         self.a &= operand;
-        self.update_status(self.a);
+        self.update_zn(self.a);
     }
 
     /// Shifts bits at memory address `address` left one position.
@@ -404,7 +403,7 @@ impl CPU {
         let msb = (self.memory[address as usize] & 0x80) != 0;
         self.memory[address as usize] <<= 1;
         self.set_flag(Flag::Carry, msb);
-        self.update_status(self.memory[address as usize]);
+        self.update_zn(self.memory[address as usize]);
     }
 
     /// Shifts bits at `address` right one position.
@@ -413,7 +412,7 @@ impl CPU {
         let lsb = (self.memory[address as usize] & 0x80) != 0;
         self.memory[address as usize] >>= 1;
         self.set_flag(Flag::Carry, lsb);
-        self.update_status(self.memory[address as usize]);
+        self.update_zn(self.memory[address as usize]);
     }
 
     /// Rotates bits at `address` left one position.
@@ -423,7 +422,7 @@ impl CPU {
         self.set_flag(Flag::Carry, self.memory[address as usize] & 0x80 != 0);  // if the MSB is set, set the carry bit
         self.memory[address as usize] <<= 1;
         self.memory[address as usize] |= c as u8;
-        self.update_status(self.memory[address as usize]);
+        self.update_zn(self.memory[address as usize]);
     }
 
     /// Rotates bits at `address` right one position.
@@ -433,7 +432,7 @@ impl CPU {
         self.set_flag(Flag::Carry, self.memory[address as usize] & 1 != 0); // if the LSB is set, set the carry
         self.memory[address as usize] >>= 1;
         self.memory[address as usize] |= if c { 0x80 } else { 0 };
-        self.update_status(self.memory[address as usize]);
+        self.update_zn(self.memory[address as usize]);
     }
 
     /// Branches according to data in memory
@@ -538,7 +537,7 @@ impl CPU {
                         let msb = (self.a & 0x80) != 0;
                         self.a <<= 1;
                         self.set_flag(Flag::Carry, msb);
-                        self.update_status(self.a);
+                        self.update_zn(self.a);
                     } else {
                         let address = self.read_address(i.mode);
                         self.shift_left(address);
@@ -617,13 +616,13 @@ impl CPU {
                     // Decrement memory
                     let address = self.read_address(i.mode);
                     self.memory[address as usize] -= 1;
-                    self.update_status(self.memory[address as usize]);
+                    self.update_zn(self.memory[address as usize]);
                 },
                 instruction::Mnemonic::EOR => {
                     // XOR with accumulator
                     let value = self.read_value(i.mode);
                     self.a ^= value;
-                    self.update_status(self.a);
+                    self.update_zn(self.a);
                 },
                 instruction::Mnemonic::CLC => {
                     self.set_flag(Flag::Carry, false);
@@ -650,7 +649,7 @@ impl CPU {
                     // Increment memory
                     let address = self.read_address(i.mode);
                     self.memory[address as usize] += 1;
-                    self.update_status(self.memory[address as usize]);
+                    self.update_zn(self.memory[address as usize]);
                 },
                 instruction::Mnemonic::JMP => {
                     // JMP has two addressing modes
@@ -668,17 +667,17 @@ impl CPU {
                 instruction::Mnemonic::LDA => {
                     // LDA
                     self.a = self.read_value(i.mode);
-                    self.update_status(self.a);
+                    self.update_zn(self.a);
                 },
                 instruction::Mnemonic::LDX => {
                     // LDX
                     self.x = self.read_value(i.mode);
-                    self.update_status(self.x);
+                    self.update_zn(self.x);
                 },
                 instruction::Mnemonic::LDY => {
                     // LDY
                     self.y = self.read_value(i.mode);
-                    self.update_status(self.y);
+                    self.update_zn(self.y);
                 },
                 instruction::Mnemonic::LSR => {
                     // Logical shift right
@@ -687,7 +686,7 @@ impl CPU {
                         let lsb = (self.a & 0x01) != 0;
                         self.a >>= 1;
                         self.set_flag(Flag::Carry, lsb);
-                        self.update_status(self.a);
+                        self.update_zn(self.a);
                     } else {
                         let address = self.read_address(i.mode);
                         self.shift_right(address);
@@ -705,39 +704,39 @@ impl CPU {
                     // Bitwise OR with accumulator
                     let value = self.read_value(i.mode);
                     self.a |= value;
-                    self.update_status(self.a);
+                    self.update_zn(self.a);
                 },
                 instruction::Mnemonic::TAX => {
                     self.x = self.a;
-                    self.update_status(self.x);
+                    self.update_zn(self.x);
                 },
                 instruction::Mnemonic::TXA => {
                     self.a = self.x;
-                    self.update_status(self.a);
+                    self.update_zn(self.a);
                 },
                 instruction::Mnemonic::DEX => {
                     self.x -= 1;
-                    self.update_status(self.x);
+                    self.update_zn(self.x);
                 },
                 instruction::Mnemonic::INX => {
                     self.x += 1;
-                    self.update_status(self.x);
+                    self.update_zn(self.x);
                 },
                 instruction::Mnemonic::TAY => {
                     self.y = self.a;
-                    self.update_status(self.y);
+                    self.update_zn(self.y);
                 },
                 instruction::Mnemonic::TYA => {
                     self.a = self.y;
-                    self.update_status(self.a);
+                    self.update_zn(self.a);
                 },
                 instruction::Mnemonic::DEY => {
                     self.y -= 1;
-                    self.update_status(self.y);
+                    self.update_zn(self.y);
                 },
                 instruction::Mnemonic::INY => {
                     self.y += 1;
-                    self.update_status(self.y);
+                    self.update_zn(self.y);
                 },
                 instruction::Mnemonic::ROL => {
                     // rotate left
@@ -747,7 +746,7 @@ impl CPU {
                         self.set_flag(Flag::Carry, self.a & 0x80 != 0);  // if the MSB is set, set the carry bit
                         self.a <<= 1;
                         self.a |= c as u8;
-                        self.update_status(self.a);
+                        self.update_zn(self.a);
                     } else {
                         let address = self.read_address(i.mode);
                         self.rotate_left(address);
@@ -760,7 +759,7 @@ impl CPU {
                         self.set_flag(Flag::Carry, self.a & 0x01 != 0);  // if the MSB is set, set the carry bit
                         self.a >>= 1;
                         self.a |= if c { 0x80 } else { 0 };
-                        self.update_status(self.a);
+                        self.update_zn(self.a);
                     } else {
                         let address = self.read_address(i.mode);
                         self.rotate_right(address);
@@ -785,12 +784,12 @@ impl CPU {
                 instruction::Mnemonic::TXS => {
                     // TXS
                     self.sp = self.x;
-                    self.update_status(self.sp);
+                    self.update_zn(self.sp);
                 },
                 instruction::Mnemonic::TSX => {
                     // TSX
                     self.x = self.sp;
-                    self.update_status(self.x);
+                    self.update_zn(self.x);
                 },
                 instruction::Mnemonic::PHA => {
                     // PHA
@@ -799,7 +798,7 @@ impl CPU {
                 instruction::Mnemonic::PLA => {
                     // PLA
                     self.a = self.pop();
-                    self.update_status(self.a);
+                    self.update_zn(self.a);
                 },
                 instruction::Mnemonic::PHP => {
                     // PHP
