@@ -438,6 +438,7 @@ impl CPU {
     fn branch(&mut self, condition: bool) {
         if condition {
             let offset = self.memory[self.pc as usize] as i8;   // offset is signed
+            self.pc = self.pc.overflowing_add(1).0;
             if offset < 0 {
                 self.pc = self.pc.overflowing_sub((offset as i16).abs() as u16).0;
             }
