@@ -320,14 +320,16 @@ impl CPU {
     fn push(&mut self, value: u8) {
         let address: u16 = ((STACK_PAGE as u16) << 8) | (self.sp as u16);
         self.memory[address as usize] = value;
-        self.sp = self.sp.overflowing_sub(1).0;
+        let t = self.sp.overflowing_sub(1);
+        self.sp = t.0;
     }
 
     /// Pop a value off the stack. Reminder the 6502's stack grows downwards.
     /// This will increment the SP and then read a value (due to the 6502 using an empty stack).
     /// Keep in mind, as with the `push` function, the 6502 does not have stack underflow detection
     fn pop(&mut self) -> u8 {
-        self.sp = self.sp.overflowing_add(1).0;
+        let t = self.sp.overflowing_add(1);
+        self.sp = t.0;
         let address: u16 = ((STACK_PAGE as u16) << 8) | (self.sp as u16);
         let value = self.memory[address as usize];
         return value;
@@ -349,7 +351,7 @@ impl CPU {
         let result = minuend - subtrahend as u16;
         self.set_flag(
             Flag::Carry, 
-            if result > 0xff { false } else { true }
+            if result <= 0xff
         );
         if self.is_set(Flag::Overflow) {
             self.set_flag(Flag::Overflow, if result < 0x80 || result >= 0x180 { false } else { true });
@@ -378,7 +380,7 @@ impl CPU {
         // update status flags, clearing the overflow flag based on the result
         self.set_flag(
             Flag::Carry, 
-            if result > 0xff { false } else { true }
+            result > 0xff
         );
         if self.is_set(Flag::Overflow) {
             self.set_flag(Flag::Overflow, if result < 0x80 || result >= 0x180 { false } else { true });

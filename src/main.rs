@@ -19,7 +19,7 @@ fn main() {
 
     // get the program
     print!("Enter the filename (located in samples/): ");
-    io::stdout().flush();
+    io::stdout().flush().expect("Flushing output buffer");
     let mut s = String::new();
     io::stdin().read_line(&mut s).expect("Failed to read from stdin");
     let filename = format!("samples/{}", s.trim());
