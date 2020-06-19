@@ -9,7 +9,7 @@ pub enum Mnemonic {
     ADC, AND, ASL, BIT, BPL, BMI, BVC, BVS, BCC, BCS, BNE, BEQ, BRK, CMP, CPX, CPY, 
     DEC, EOR, CLC, SEC, CLI, SEI, CLV, CLD, SED, INC, JMP, JSR, LDA, LDX, LDY, LSR,
     NOP, ORA, TAX, TXA, DEX, INX, TAY, TYA, DEY, INY, ROL, ROR, RTI, RTS, SBC, STA,
-    TXS, TSX, PHA, PLA, PHP, PLP, STX, STY,
+    TXS, TSX, PHA, PLA, PHP, PLP, STX, STY, XAA, LAX
 }
 
 #[derive(PartialEq, Eq)]
@@ -666,6 +666,24 @@ pub static INSTRUCTIONS: phf::Map<u8, Instruction> = phf_map! {
         mode: AddressingMode::Implied,
         time: 2,
     },
+    0x80u8 => Instruction{  // Unofficial
+        opcode: 0x80,
+        mnemonic: Mnemonic::NOP,
+        mode: AddressingMode::Immediate,
+        time: 2,
+    },
+    0xdau8 => Instruction{  // Unofficial
+        opcode: 0xda,
+        mnemonic: Mnemonic::NOP,
+        mode: AddressingMode::Implied,
+        time: 2,
+    },
+    0xfau8 => Instruction{  // Unofficial
+        opcode: 0xfa,
+        mnemonic: Mnemonic::NOP,
+        mode: AddressingMode::Implied,
+        time: 2,
+    },
 
     // ORA
     0x09u8 => Instruction{
@@ -1019,4 +1037,18 @@ pub static INSTRUCTIONS: phf::Map<u8, Instruction> = phf_map! {
         mode: AddressingMode::Absolute,
         time: 4,
     },
+
+    // Unofficial opcodes
+    0x8bu8 => Instruction{
+        opcode: 0x8b,
+        mnemonic: Mnemonic::XAA,
+        mode: AddressingMode::Immediate,
+        time: 2,
+    },
+    0xabu8 => Instruction{
+        opcode: 0xab,
+        mnemonic: Mnemonic::LAX,
+        mode: AddressingMode::Immediate,
+        time: 2,
+    }
 };

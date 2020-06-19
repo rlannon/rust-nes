@@ -148,7 +148,7 @@ impl CPU {
             mode == instruction::AddressingMode::Zero ||
             mode == instruction::AddressingMode::ZeroX ||
             mode == instruction::AddressingMode::ZeroY {
-                let address: u8 = self.memory[self.pc as usize] + offset;
+                let address: u16 = self.read_zp_address(mode);
                 value = self.memory[address as usize];
         }
         else if
@@ -310,42 +310,8 @@ impl CPU {
     /// Store an 8-bit value `value` in memory at address according to the addressing mode `mode`.
     /// Affects no flags.
     fn store(&mut self, value: u8, mode: instruction::AddressingMode) {
-        // Get the offset
-        let offset: u8 = 
-                if mode == instruction::AddressingMode::AbsoluteX ||
-                    mode == instruction::AddressingMode::ZeroX
-                {
-                    self.x
-                }
-                else if mode == instruction::AddressingMode::AbsoluteY ||
-                        mode == instruction::AddressingMode::AbsoluteY
-                {
-                    self.y
-                }
-                else {
-                    0
-                };
-        
-        // Store according to the mode
-        let address;
-        if mode == instruction::AddressingMode::Absolute || mode == instruction::AddressingMode::AbsoluteX || mode == instruction::AddressingMode::AbsoluteY {
-            address = self.read_absolute_address() + offset as u16;
-        }
-        else if mode == instruction::AddressingMode::Zero || mode == instruction::AddressingMode::ZeroX || mode == instruction::AddressingMode::ZeroY {
-            address = (self.memory[self.pc as usize] + offset) as u16;
-        }
-        else if mode == instruction::AddressingMode::IndirectX {
-            address = self.read_indexed_indirect_address();
-        } else if mode == instruction::AddressingMode::IndirectY {
-            address = self.read_indirect_indexed_address();
-        }
-        else {
-            // todo: invalid mode?
-            address = 0;
-        }
-
-        // perform the assignment
-        self.memory[address as usize] = value;
+        let address = self.read_address(mode);  // get the address
+        self.memory[address as usize] = value;  // perform the assignment
     }
 
     /// Push a value `value` onto the stack
@@ -497,7 +463,7 @@ impl CPU {
         self.push((self.pc & 0xFF) as u8);  // push LSB
         self.push(self.status);
         self.set_flag(Flag::Interrupt, true);
-        let address = (self.memory[IRQ_VECTOR as usize] as u16) & ((self.memory[(IRQ_VECTOR + 1) as usize] as u16) << 8);
+        let address = (self.memory[IRQ_VECTOR as usize] as u16) | ((self.memory[(IRQ_VECTOR as usize) + 1] as u16) << 8);
         self.pc = address;
     }
 
@@ -518,9 +484,12 @@ impl CPU {
     /// Reads two bytes from the stack (LSB then MSB) and returns to that address
     /// Note that if `is_subroutine` is set, returns to the address + 1; else, returns to the exact address
     fn ret(&mut self, is_subroutine: bool) {
+        if !is_subroutine {
+            self.status = self.pop();
+        }
         let lsb = self.pop();
         let msb = self.pop();
-        let address = (((msb as u16) << 8) & lsb as u16) + if is_subroutine { 1 } else { 0 };
+        let address = (((msb as u16) << 8) | lsb as u16) + if is_subroutine { 1 } else { 0 };
         self.pc = address;
     }
 
@@ -615,8 +584,13 @@ impl CPU {
                     self.branch(self.is_set(Flag::Zero));
                 },
                 instruction::Mnemonic::BRK => {
-                    // BRK sets the B flag and increments the pc by one
-                    // Also causes a non-maskable interrupt
+                    /*
+                    
+                    BRK sets the B flag and increments the pc by one
+                    This means it is technically a 2-byte opcode -- 0x00 and a padding byte
+                    BRK is used to trigger software interrupts
+                    
+                    */
                     self.set_flag(Flag::B, true);
                     self.pc += 1;
                     self.interrupt();
@@ -718,7 +692,11 @@ impl CPU {
                 },
                 instruction::Mnemonic::NOP => {
                     // NOP
-                    // do nothing
+
+                    // Unofficial opcodes have different addressing modes, but do nothing with the value
+                    if i.mode != instruction::AddressingMode::Implied {
+                        self.read_value(i.mode);
+                    }
                 },
                 instruction::Mnemonic::ORA => {
                     // Bitwise OR with accumulator
@@ -836,6 +814,20 @@ impl CPU {
                     // STY
                     self.store(self.y, i.mode);
                 },
+                instruction::Mnemonic::XAA => {
+                    /*
+
+                    XAA is an unofficial opcode that is very unpredictable
+                    It relies on analog effects and will not be reproduced in this emulator
+                    Instead, it will kill the CPU
+
+                    */
+                    self.running = false;
+                },
+                instruction::Mnemonic::LAX => {
+                    // Likewise, LAX will kill
+                    self.running = false;
+                }
             };
         }
     }
@@ -843,7 +835,7 @@ impl CPU {
     // todo: in the routine that runs the cpu, check to make sure it is still marked as 'running'
 
     /// Returns whether or not the CPU is executing code
-    pub fn running(&self) -> bool {
+    pub fn is_running(&self) -> bool {
         self.running
     }
 
