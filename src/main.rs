@@ -4,6 +4,8 @@ use std::fs::File;
 use std::io::Read;
 use std::time::{Duration, Instant};
 use std::thread::sleep;
+use std::io;
+use std::io::Write;
 
 pub mod cpu;
 
@@ -11,15 +13,24 @@ fn main() {
     // Create the CPU object
     let mut nes_cpu: cpu::CPU = cpu::CPU::default();
     
-    // load the program into memory at location 0x6000
-    let mut file = File::open("samples/test.bin").unwrap();
-    file.read(&mut nes_cpu.memory[0x0600..]).unwrap();
+    // set up our vectors
+    const RESET: u16 = 0x0600;
+    const IRQ: u16 = 0x0620;
+
+    // get the program
+    print!("Enter the filename (located in samples/): ");
+    io::stdout().flush();
+    let mut s = String::new();
+    io::stdin().read_line(&mut s).expect("Failed to read from stdin");
+    let filename = format!("samples/{}", s.trim());
+    let mut file = File::open(filename).unwrap();
+    
+    // load the program into memory
+    file.read(&mut nes_cpu.memory[RESET as usize..]).unwrap();
 
     // update the vectors
-    nes_cpu.memory[cpu::RESET_VECTOR as usize] = 0x00;
-    nes_cpu.memory[cpu::RESET_VECTOR as usize + 1] = 0x06;
-    nes_cpu.memory[cpu::IRQ_VECTOR as usize] = 0x20;
-    nes_cpu.memory[cpu::IRQ_VECTOR as usize + 1] = 0x06;
+    nes_cpu.load_vector(cpu::RESET_VECTOR, RESET);
+    nes_cpu.load_vector(cpu::IRQ_VECTOR, IRQ);
 
     // reset the system
     nes_cpu.reset();
