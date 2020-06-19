@@ -142,7 +142,7 @@ impl CPU {
         // Get the value
         if mode == instruction::AddressingMode::Immediate {
             value = self.memory[self.pc as usize];
-            self.pc += 1;
+            self.pc = self.pc.overflowing_add(1).0;
         }
         else if
             mode == instruction::AddressingMode::Zero ||
@@ -167,9 +167,8 @@ impl CPU {
             value = self.memory[address as usize];
         }
         else {
-            // invalid addressing mode
-            // todo: exception of some sort?
-            value = 0;
+            // panic on invalid addressing mode
+            panic!("Illegal addressing mode");
         }
 
         value
@@ -227,11 +226,12 @@ impl CPU {
 
     /// Reads a value from memory and returns the appropriate zero page address based on the addressing mode.
     fn read_zp_address(&mut self, mode: instruction::AddressingMode) -> u16 {
-        let address = self.memory[self.pc as usize] +
+        let address = self.memory[self.pc as usize].overflowing_add(
             if mode == instruction::AddressingMode::ZeroX { self.x } 
             else if mode == instruction::AddressingMode::ZeroY { self.y } 
-            else { 0 };
-        self.pc += 1;
+            else { 0 }
+        ).0;
+        self.pc = self.pc.overflowing_add(1).0;
         return address as u16;
     }
 
@@ -256,7 +256,7 @@ impl CPU {
     fn read_indirect_address(&mut self) -> u16 {
         // fetch the address locations
         let ptr_low: u8 = self.memory[self.pc as usize];
-        self.pc += 1;
+        self.pc = self.pc.overflowing_add(1).0;
         let mut ptr_high: u8 = self.memory[self.pc as usize];
 
         // construct the indirection
@@ -265,7 +265,7 @@ impl CPU {
             (ptr_low as u16))
             as usize
         ];
-        ptr_high += 1;  // if it is 0xff, it will wrap around
+        ptr_high = ptr_high.overflowing_add(1).0;  // if it is 0xff, it will wrap around
         let addr_high: u8 = self.memory[
             (((ptr_high as u16) << 8) | 
             (ptr_low as u16))
@@ -273,7 +273,7 @@ impl CPU {
         ];
 
         // increment the PC
-        self.pc += 1;
+        self.pc = self.pc.overflowing_add(1).0;
 
         // return the address
         return (addr_high as u16) << 8 | addr_low as u16;
@@ -291,7 +291,7 @@ impl CPU {
         address += self.y as u16;
 
         // increment the PC
-        self.pc += 1;
+        self.pc = self.pc.overflowing_add(1).0;
 
         address
     }
@@ -299,11 +299,11 @@ impl CPU {
     /// Gets the indexed indirect address (indirect X)
     /// Like indirect indexed, indexed indirect can only be used with the X register -- so we don't need an offset
     fn read_indexed_indirect_address(&mut self) -> u16 {
-        let zp_address: u8 = self.memory[self.pc as usize] + self.x;
+        let zp_address: u8 = self.memory[self.pc as usize].overflowing_add(self.x).0;
         let address: u16 =
             (self.memory[zp_address as usize] as u16) |
             ((self.memory[(zp_address + 1) as usize] as u16) << 8);
-        self.pc += 1;   // increment the PC
+        self.pc = self.pc.overflowing_add(1).0;   // increment the PC
         address
     }
 
@@ -318,7 +318,7 @@ impl CPU {
     /// Note this will increment the SP and *then* write the value
     /// It's also worth noting that the 6502 does not have overflow detection, so if the stack pointer wraps around, that's normal behavior for the processor
     fn push(&mut self, value: u8) {
-        self.sp += 1;
+        self.sp = self.sp.overflowing_add(1).0;
         let address: u16 = ((STACK_PAGE as u16) << 8) | (self.sp as u16);
         self.memory[address as usize] = value;
     }
@@ -329,7 +329,7 @@ impl CPU {
     fn pop(&mut self) -> u8 {
         let address: u16 = ((STACK_PAGE as u16) << 8) | (self.sp as u16);
         let value = self.memory[address as usize];
-        self.sp -= 1;
+        self.sp = self.sp.overflowing_sub(1).0;
         return value;
     }
 
@@ -439,14 +439,14 @@ impl CPU {
         if condition {
             let offset = self.memory[self.pc as usize] as i8;   // offset is signed
             if offset < 0 {
-                self.pc -= (offset as i16).abs() as u16;
+                self.pc = self.pc.overflowing_sub((offset as i16).abs() as u16).0;
             }
             else {
-                self.pc += offset as u16;
+                self.pc = self.pc.overflowing_add(offset as u16).0;
             }
         }
         else {
-            self.pc += 1;
+            self.pc = self.pc.overflowing_add(1).0;
         }
     }
 
@@ -474,7 +474,7 @@ impl CPU {
     /// * Push LSB of the return address
     fn jsr(&mut self) {
         let new_address = self.read_absolute_address(); // get the new address
-        let return_address = self.pc - 1;   // get the return address
+        let return_address = self.pc.overflowing_sub(1).0;   // get the return address
         self.push((return_address >> 8 & 0xFF) as u8); // MSB
         self.push((return_address & 0xFF) as u8);  // LSB
         self.pc = new_address;
@@ -592,7 +592,7 @@ impl CPU {
                     
                     */
                     self.set_flag(Flag::B, true);
-                    self.pc += 1;
+                    self.pc = self.pc.overflowing_add(1).0;
                     self.interrupt();
                 },
                 instruction::Mnemonic::CMP => {
@@ -850,11 +850,16 @@ impl CPU {
         self.cycles = 0;
     }
 
+    pub fn load_vector(&mut self, vector: u16, value: u16) {
+        self.memory[vector as usize] = (value & 0xFF) as u8;
+        self.memory[vector as usize + 1] = (value >> 8) as u8;
+    }
+
     /// Steps the processor, executing an instruction
     pub fn step(&mut self) {
         // fetch the byte at the address indicated by the pc
         let instruction = self.memory[self.pc as usize];
-        self.pc += 1;   // increment the pc by one during the 'fetch cycle'
+        self.pc = self.pc.overflowing_add(1).0;   // increment the pc by one during the 'fetch cycle'
         
         // execute that instruction
         self.execute_instruction(instruction);
