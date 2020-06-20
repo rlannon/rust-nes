@@ -129,7 +129,7 @@ fn get_flag_constant(f: Flag) -> u8 {
     return constants[i];
 }
 
-fn is_memory_mapped_register(address: u16) -> bool {
+fn is_memory_mapped_register(address: u16) -> (bool, u16) {
     let b = match address & 0x3FFF {    // match with a bitmask of 0x3FFF due to memory mirroring
         PPUCTRL => true,
         PPUMASK => true,
@@ -145,10 +145,10 @@ fn is_memory_mapped_register(address: u16) -> bool {
 
     // OAMDMA is mirrored elsewhere; if it's not $2001 to $2007, check against a bitmask of 0x5FFF
     if !b {
-        address & 0x5FFF == OAMDMA
+        (address & 0x5FFF == OAMDMA, address & 0x5FFF)
     }
     else {
-        b
+        (b, address & 0x3FFF)
     }
 }
 
@@ -256,9 +256,22 @@ impl CPU {
             }
 
             // check to see if we are reading from a memory-mapped PPU register
-            if is_memory_mapped_register(address) {
-                // todo: PPU registers
-                value = 0u8;    // fixme: just a placeholder
+            let r = is_memory_mapped_register(address);
+            if r.0 {
+                unsafe {
+                    value = match r.1 {
+                        PPUCTRL => *self.ppuctrl,
+                        PPUMASK => *self.ppumask,
+                        PPUSTATUS => *self.ppustatus,
+                        OAMADDR => *self.oamaddr,
+                        OAMDATA => *self.oamdata,
+                        PPUSCROLL => *self.ppuscroll,
+                        PPUADDR => *self.ppuaddr,
+                        PPUDATA => *self.ppudata,
+                        OAMDMA => *self.oamdma,
+                        _ => self.memory.read(address),
+                    };
+                }
             }
             else {
                 // otherwise, read the value and return it
@@ -404,8 +417,23 @@ impl CPU {
         let address = self.read_address(mode);  // get the address
 
         // first, see if we are writing to a memory-mapped PPU register
-        if is_memory_mapped_register(address) {
-            // todo: ppu registers
+        let r = is_memory_mapped_register(address);
+        if r.0 {
+            // store in the appropriate memory-mapped register
+            unsafe {
+                match r.1 {
+                    PPUCTRL => *self.ppuctrl = value,
+                    PPUMASK => *self.ppumask = value,
+                    PPUSTATUS => *self.ppustatus = value,
+                    OAMADDR => *self.oamaddr = value,
+                    OAMDATA => *self.oamdata = value,
+                    PPUSCROLL => *self.ppuscroll = value,
+                    PPUADDR => *self.ppuaddr = value,
+                    PPUDATA => *self.ppudata = value,
+                    OAMDMA => *self.oamdma = value,
+                    _ => self.memory.write(address, value),
+                };
+            }
         }
         else {
             // otherwise, write to memory
