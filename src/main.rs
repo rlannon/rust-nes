@@ -11,6 +11,7 @@ pub mod cpu;
 pub mod ppu;
 pub mod nes;
 pub mod mem;
+pub mod iNES;
 
 fn main() {
     // Create the CPU object
