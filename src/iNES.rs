@@ -16,6 +16,10 @@ enum Timing {
     Dendy,
 }
 
+// constants for the format
+const MAGIC_NUMBER: [u8; 4] = ['N' as u8, 'E' as u8, 'S' as u8, 0x1a];
+
+/// A struct containing information about a file conforming to the NES 2.0 spec.
 pub struct NesFormat {
     // sizes
     prg_rom_size: u16,  // actually 12 bits
@@ -43,7 +47,20 @@ pub struct NesFormat {
 impl NesFormat {
     /// Reads through a binary file (contained within a buffer) and returns a NesFormat object
     pub fn read_ines(buf: &[u8]) -> NesFormat {
+        // initialization
+        let mut index = 0usize;
+
+        // read the header
+        let magic_number = [ buf[index], buf[index + 1], buf[index + 2], buf[index + 3] ];
+        if magic_number == MAGIC_NUMBER {
+            println!("Valid header");
+        }
+        else {
+            panic!("Invalid iNES header");
+        }
+        
         // todo: read file
+
         NesFormat {
             // dummy values for compilation
             prg_rom_size: 0,
