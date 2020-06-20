@@ -41,6 +41,17 @@ enum Flag {
     Carry,
 }
 
+// Memory-mapped PPU register locations
+const PPUCTRL: u16 = 0x2000;
+const PPUMASK: u16 = 0x2001;
+const PPUSTATUS: u16 = 0x2002;
+const OAMADDR: u16 = 0x2003;
+const OAMDATA: u16 = 0x2004;
+const PPUSCROLL: u16 = 0x2005;
+const PPUADDR: u16 = 0x2006;
+const PPUDATA: u16 = 0x2007;
+const OAMDMA: u16 = 0x4014;
+
 /// The struct that implements the NES's CPU.
 pub(in crate) struct CPU {
     // track cycle count so that we can limit the CPU's speed
@@ -196,31 +207,37 @@ impl CPU {
             value = self.memory.read(self.pc);
             self.pc = self.pc.overflowing_add(1).0;
         }
-        else if
-            mode == instruction::AddressingMode::Zero ||
-            mode == instruction::AddressingMode::ZeroX ||
-            mode == instruction::AddressingMode::ZeroY {
-                let address: u16 = self.read_zp_address(mode);
-                value = self.memory.read(address);
-        }
-        else if
-            mode == instruction::AddressingMode::Absolute ||
-            mode == instruction::AddressingMode::AbsoluteX ||
-            mode == instruction::AddressingMode::AbsoluteY {
-                let address: u16 = self.read_absolute_address() + offset as u16;
-                value = self.memory.read(address);
-        }
-        else if mode == instruction::AddressingMode::IndirectX {
-            let address: u16 = self.read_indexed_indirect_address();
-            value = self.memory.read(address);
-        }
-        else if mode == instruction::AddressingMode::IndirectY {
-            let address: u16 = self.read_indirect_indexed_address();
-            value = self.memory.read(address);
-        }
         else {
-            // panic on invalid addressing mode
-            panic!("Illegal addressing mode");
+            let address: u16;
+            if
+                mode == instruction::AddressingMode::Zero ||
+                mode == instruction::AddressingMode::ZeroX ||
+                mode == instruction::AddressingMode::ZeroY {
+                    address = self.read_zp_address(mode);
+            }
+            else if
+                mode == instruction::AddressingMode::Absolute ||
+                mode == instruction::AddressingMode::AbsoluteX ||
+                mode == instruction::AddressingMode::AbsoluteY {
+                    address = self.read_absolute_address() + offset as u16;
+            }
+            else if mode == instruction::AddressingMode::IndirectX {
+                address = self.read_indexed_indirect_address();
+            }
+            else if mode == instruction::AddressingMode::IndirectY {
+                address = self.read_indirect_indexed_address();
+            }
+            else {
+                // panic on invalid addressing mode
+                panic!("Illegal addressing mode");
+            }
+
+            // check to see if we are reading from a memory-mapped PPU register
+
+            // todo: PPU registers
+
+            // otherwise, read the value and return it
+            value = self.memory.read(address);
         }
 
         value
@@ -359,6 +376,12 @@ impl CPU {
     /// Affects no flags.
     fn store(&mut self, value: u8, mode: instruction::AddressingMode) {
         let address = self.read_address(mode);  // get the address
+
+        // first, see if we are writing to a memory-mapped PPU register
+
+        // todo: ppu registers
+
+        // otherwise, write to memory
         self.memory.write(address, value);  // perform the assignment
     }
 
