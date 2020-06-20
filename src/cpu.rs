@@ -129,6 +129,29 @@ fn get_flag_constant(f: Flag) -> u8 {
     return constants[i];
 }
 
+fn is_memory_mapped_register(address: u16) -> bool {
+    let b = match address & 0x3FFF {    // match with a bitmask of 0x3FFF due to memory mirroring
+        PPUCTRL => true,
+        PPUMASK => true,
+        PPUSTATUS => true,
+        OAMADDR => true,
+        OAMDATA => true,
+        PPUSCROLL => true,
+        PPUADDR => true,
+        PPUDATA => true,
+        OAMDMA => true,
+        _ => false,
+    };
+
+    // OAMDMA is mirrored elsewhere; if it's not $2001 to $2007, check against a bitmask of 0x5FFF
+    if !b {
+        address & 0x5FFF == OAMDMA
+    }
+    else {
+        b
+    }
+}
+
 impl CPU {
     /// Creates a new CPU
     pub(in crate) fn new(
@@ -233,11 +256,14 @@ impl CPU {
             }
 
             // check to see if we are reading from a memory-mapped PPU register
-
-            // todo: PPU registers
-
-            // otherwise, read the value and return it
-            value = self.memory.read(address);
+            if is_memory_mapped_register(address) {
+                // todo: PPU registers
+                value = 0u8;    // fixme: just a placeholder
+            }
+            else {
+                // otherwise, read the value and return it
+                value = self.memory.read(address);
+            }
         }
 
         value
@@ -378,11 +404,13 @@ impl CPU {
         let address = self.read_address(mode);  // get the address
 
         // first, see if we are writing to a memory-mapped PPU register
-
-        // todo: ppu registers
-
-        // otherwise, write to memory
-        self.memory.write(address, value);  // perform the assignment
+        if is_memory_mapped_register(address) {
+            // todo: ppu registers
+        }
+        else {
+            // otherwise, write to memory
+            self.memory.write(address, value);  // perform the assignment
+        }
     }
 
     /// Push a value `value` onto the stack. Note the 6502's stack grows downwards.
