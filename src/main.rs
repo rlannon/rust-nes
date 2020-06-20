@@ -8,11 +8,15 @@ use std::io;
 use std::io::Write;
 
 pub mod cpu;
+pub mod ppu;
+pub mod nes;
 
 fn main() {
     // Create the CPU object
-    let mut nes_cpu: cpu::CPU = cpu::CPU::default();
-    
+    //let mut nes_cpu: cpu::CPU = cpu::CPU::default();
+    let mut nes_sys = nes::NES::new();
+    let nes_cpu = &mut nes_sys.cpu;
+
     // set up our vectors
     const RESET: u16 = 0x0600;
     const IRQ: u16 = 0x0620;
@@ -36,7 +40,7 @@ fn main() {
     nes_cpu.reset();
 
     // maintain an accurate speed
-    let emu_speed = cpu::NTSC_SPEED as u64; // depends on whether it is running in NTSC or PAL mode
+    let emu_speed = cpu::NTSC_SPEED; // depends on whether it is running in NTSC or PAL mode
     let mut now = Instant::now();
     let mut update = false;
 

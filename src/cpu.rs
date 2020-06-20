@@ -41,41 +41,52 @@ enum Flag {
 }
 
 /// The struct that implements the NES's CPU.
-pub struct CPU {
-    // track cycle count since last vblank
-    cycles: u64,
+pub(in crate) struct CPU {
+    // track cycle count so that we can limit the CPU's speed
+    cycles: u32,
 
     // whether the processor is running
-    running: bool,
+    pub(in crate) running: bool,
 
     // processor registers
-    status: u8,
-    pc: u16,
-    sp: u8,
-    a: u8,
-    x: u8,
-    y: u8,
+    pub(in crate) status: u8,
+    pub(in crate) pc: u16,
+    pub(in crate) sp: u8,
+    pub(in crate) a: u8,
+    pub(in crate) x: u8,
+    pub(in crate) y: u8,
+
+    // memory-mapped PPU registers
+    ppuctrl: *mut u8,
+    ppumask: *mut u8,
+    ppustatus: *mut u8,
+    oamaddr: *mut u8,
+    oamdata: *mut u8,
+    ppuscroll: *mut u8,
+    ppuaddr: *mut u8,
+    ppudata: *mut u8,
+    oamdma: *mut u8,
 
     // processor memory
-    pub memory: [u8; 65536],
+    pub(in crate) memory: [u8; 65536],
 }
 
-impl Default for CPU {
-    #[inline]
-    fn default() -> CPU {
-        CPU {
-            cycles: 0,
-            running: false,
-            status: 0,
-            pc: 0,
-            sp: 0,
-            a: 0,
-            x: 0,
-            y: 0,
-            memory: [0; 65536]
-        }
-    }
-}
+// impl Default for CPU {
+//     #[inline]
+//     fn default() -> CPU {
+//         CPU {
+//             cycles: 0,
+//             running: false,
+//             status: 0,
+//             pc: 0,
+//             sp: 0,
+//             a: 0,
+//             x: 0,
+//             y: 0,
+//             memory: [0; 65536]
+//         }
+//     }
+// }
 
 /// Gets the constant associated with the given Flag
 /// For example, if I call `get_flag_constant(Flag::Negative)`, it will return `0b10000000`, or the constant `N_FLAG`.
@@ -107,6 +118,46 @@ fn get_flag_constant(f: Flag) -> u8 {
 }
 
 impl CPU {
+    /// Creates a new CPU
+    pub(in crate) fn new(
+        ppu_ppuctrl: *mut u8,
+        ppu_ppumask: *mut u8,
+        ppu_ppustatus: *mut u8,
+        ppu_oamaddr: *mut u8,
+        ppu_oamdata: *mut u8,
+        ppu_ppuscroll: *mut u8,
+        ppu_ppuaddr: *mut u8,
+        ppu_ppudata: *mut u8,
+        ppu_oamdma: *mut u8,
+    ) -> CPU {
+        CPU {
+            cycles: 0,
+            running: false,
+
+            // initialize cpu registers
+            status: 0,
+            pc: 0,
+            sp: 0,
+            a: 0,
+            x: 0,
+            y: 0,
+
+            // initialize ppu register mappings
+            ppuctrl: ppu_ppuctrl,
+            ppumask: ppu_ppumask,
+            ppustatus: ppu_ppustatus,
+            oamaddr: ppu_oamaddr,
+            oamdata: ppu_oamdata,
+            ppuscroll: ppu_ppuscroll,
+            ppuaddr: ppu_ppuaddr,
+            ppudata: ppu_ppudata,
+            oamdma: ppu_oamdma,
+
+            // initialize memory
+            memory: [0; 65536],
+        }
+    }
+
     /// Sets the register flag `f` to the value `v`
     fn set_flag(&mut self, f: Flag, v: bool) {
         let flag_constant = get_flag_constant(f);
@@ -518,7 +569,7 @@ impl CPU {
             let i: &instruction::Instruction = &instruction::INSTRUCTIONS[&opcode];
 
             // add the number of cycles to the total
-            self.cycles += i.time as u64;
+            self.cycles += i.time as u32;
 
             // use a match statement instead of if/else if/else
             match i.mnemonic {
@@ -842,7 +893,7 @@ impl CPU {
     }
 
     /// Returns the number of cycles that have passed
-    pub fn cycle_count(&self) -> u64 {
+    pub fn cycle_count(&self) -> u32 {
         self.cycles
     }
 
