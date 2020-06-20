@@ -12,12 +12,16 @@ pub(in crate) struct PPU {
     pub ppuaddr: u8,
     pub ppudata: u8,
     pub oamdma: u8,
+
+    // PPU memory
+    pub(in crate) vram: [u8; 0x4000],
 }
 
 impl PPU {
     /// Constructs a new PPU object.
     pub fn new() -> PPU {
         PPU {
+            // registers
             ppuctrl: 0,
             ppumask: 0,
             ppustatus: 0,
@@ -27,6 +31,9 @@ impl PPU {
             ppuaddr: 0,
             ppudata: 0,
             oamdma: 0,
+
+            // memory
+            vram: [0; 0x4000],
         }
     }
 }

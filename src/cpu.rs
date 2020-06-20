@@ -2,6 +2,7 @@
 // Implements the 6502 variant used in the NES
 
 mod instruction;
+use crate::mem::{Mem, CpuRam};
 
 /// The stack page is hard-wired to page 1
 const STACK_PAGE: u8 = 0x01;
@@ -68,7 +69,7 @@ pub(in crate) struct CPU {
     oamdma: *mut u8,
 
     // processor memory
-    pub(in crate) memory: [u8; 65536],
+    pub(in crate) memory: CpuRam,
 }
 
 // impl Default for CPU {
@@ -154,7 +155,7 @@ impl CPU {
             oamdma: ppu_oamdma,
 
             // initialize memory
-            memory: [0; 65536],
+            memory: CpuRam::new(),
         }
     }
 
@@ -192,7 +193,7 @@ impl CPU {
 
         // Get the value
         if mode == instruction::AddressingMode::Immediate {
-            value = self.memory[self.pc as usize];
+            value = self.memory.read(self.pc);
             self.pc = self.pc.overflowing_add(1).0;
         }
         else if
@@ -200,22 +201,22 @@ impl CPU {
             mode == instruction::AddressingMode::ZeroX ||
             mode == instruction::AddressingMode::ZeroY {
                 let address: u16 = self.read_zp_address(mode);
-                value = self.memory[address as usize];
+                value = self.memory.read(address);
         }
         else if
             mode == instruction::AddressingMode::Absolute ||
             mode == instruction::AddressingMode::AbsoluteX ||
             mode == instruction::AddressingMode::AbsoluteY {
                 let address: u16 = self.read_absolute_address() + offset as u16;
-                value = self.memory[address as usize];
+                value = self.memory.read(address);
         }
         else if mode == instruction::AddressingMode::IndirectX {
             let address: u16 = self.read_indexed_indirect_address();
-            value = self.memory[address as usize];
+            value = self.memory.read(address);
         }
         else if mode == instruction::AddressingMode::IndirectY {
             let address: u16 = self.read_indirect_indexed_address();
-            value = self.memory[address as usize];
+            value = self.memory.read(address);
         }
         else {
             // panic on invalid addressing mode
@@ -276,7 +277,7 @@ impl CPU {
 
     /// Reads a value from memory and returns the appropriate zero page address based on the addressing mode.
     fn read_zp_address(&mut self, mode: instruction::AddressingMode) -> u16 {
-        let address = self.memory[self.pc as usize].overflowing_add(
+        let address = self.memory.read(self.pc).overflowing_add(
             if mode == instruction::AddressingMode::ZeroX { self.x } 
             else if mode == instruction::AddressingMode::ZeroY { self.y } 
             else { 0 }
@@ -289,8 +290,8 @@ impl CPU {
     /// Increments the pc to the last byte of the address
     fn read_absolute_address(&mut self) -> u16 {
         let address =
-            (self.memory[self.pc as usize] as u16) |
-            ((self.memory[(self.pc + 1) as usize] as u16) << 8);
+            (self.memory.read(self.pc) as u16) |
+            ((self.memory.read(self.pc + 1) as u16) << 8);
         self.pc += 2;   // Skip the bytes of the address
         return address;
     }
@@ -305,22 +306,20 @@ impl CPU {
     /// instead of loading the address from `0x02FF - 0x0300`, the low byte will come from `0x02FF` and the high byte will come from `0x0200`. As such, an indirect jump should *never* use the last byte of a page in its indirection.
     fn read_indirect_address(&mut self) -> u16 {
         // fetch the address locations
-        let ptr_low: u8 = self.memory[self.pc as usize];
+        let ptr_low: u8 = self.memory.read(self.pc);
         self.pc = self.pc.overflowing_add(1).0;
-        let mut ptr_high: u8 = self.memory[self.pc as usize];
+        let mut ptr_high: u8 = self.memory.read(self.pc);
 
         // construct the indirection
-        let addr_low: u8 = self.memory[
-            (((ptr_high as u16) << 8) | 
-            (ptr_low as u16))
-            as usize
-        ];
+        let addr_low: u8 = self.memory.read(
+            ((ptr_high as u16) << 8) | 
+            (ptr_low as u16)
+        );
         ptr_high = ptr_high.overflowing_add(1).0;  // if it is 0xff, it will wrap around
-        let addr_high: u8 = self.memory[
-            (((ptr_high as u16) << 8) | 
-            (ptr_low as u16))
-            as usize
-        ];
+        let addr_high: u8 = self.memory.read(
+            ((ptr_high as u16) << 8) | 
+            (ptr_low as u16)
+        );
 
         // increment the PC
         self.pc = self.pc.overflowing_add(1).0;
@@ -333,11 +332,10 @@ impl CPU {
     /// Reads one byte, giving the address in the zero page where the pointer is stored; the little-endian 16-bit address is then read and returned
     /// Since indirect indexed can only be used with the Y register, we don't need an offset
     fn read_indirect_indexed_address(&mut self) -> u16 {
-        let zp_address: u8 = self.memory[self.pc as usize];
+        let zp_address: u8 = self.memory.read(self.pc);
         let mut address: u16 = 
-            (self.memory[zp_address as usize] as u16) |
-            ((self.memory[(zp_address + 1) as usize] as u16) << 8)
-        ;
+            (self.memory.read(zp_address as u16) as u16) |
+            ((self.memory.read((zp_address + 1) as u16) as u16) << 8);
         address += self.y as u16;
 
         // increment the PC
@@ -349,10 +347,10 @@ impl CPU {
     /// Gets the indexed indirect address (indirect X)
     /// Like indirect indexed, indexed indirect can only be used with the X register -- so we don't need an offset
     fn read_indexed_indirect_address(&mut self) -> u16 {
-        let zp_address: u8 = self.memory[self.pc as usize].overflowing_add(self.x).0;
+        let zp_address: u8 = self.memory.read(self.pc).overflowing_add(self.x).0;
         let address: u16 =
-            (self.memory[zp_address as usize] as u16) |
-            ((self.memory[(zp_address + 1) as usize] as u16) << 8);
+            (self.memory.read(zp_address as u16) as u16) |
+            ((self.memory.read((zp_address + 1) as u16) as u16) << 8);
         self.pc = self.pc.overflowing_add(1).0;   // increment the PC
         address
     }
@@ -361,7 +359,7 @@ impl CPU {
     /// Affects no flags.
     fn store(&mut self, value: u8, mode: instruction::AddressingMode) {
         let address = self.read_address(mode);  // get the address
-        self.memory[address as usize] = value;  // perform the assignment
+        self.memory.write(address, value);  // perform the assignment
     }
 
     /// Push a value `value` onto the stack. Note the 6502's stack grows downwards.
@@ -369,7 +367,7 @@ impl CPU {
     /// It's also worth noting that the 6502 does not have overflow detection, so if the stack pointer wraps around, that's normal behavior for the processor
     fn push(&mut self, value: u8) {
         let address: u16 = ((STACK_PAGE as u16) << 8) | (self.sp as u16);
-        self.memory[address as usize] = value;
+        self.memory.write(address, value);
         let t = self.sp.overflowing_sub(1);
         self.sp = t.0;
     }
@@ -381,7 +379,7 @@ impl CPU {
         let t = self.sp.overflowing_add(1);
         self.sp = t.0;
         let address: u16 = ((STACK_PAGE as u16) << 8) | (self.sp as u16);
-        let value = self.memory[address as usize];
+        let value = self.memory.read(address);
         return value;
     }
 
@@ -451,45 +449,45 @@ impl CPU {
     /// Shifts bits at memory address `address` left one position.
     /// A bitshift means zero is shifted in and the outgoing bit is shifted into the Carry bit.
     fn shift_left(&mut self, address: u16) {
-        let msb = (self.memory[address as usize] & 0x80) != 0;
-        self.memory[address as usize] <<= 1;
+        let msb = (self.memory.read(address) & 0x80) != 0;
+        self.memory.write(address, self.memory.read(address) << 1);
         self.set_flag(Flag::Carry, msb);
-        self.update_zn(self.memory[address as usize]);
+        self.update_zn(self.memory.read(address));
     }
 
     /// Shifts bits at `address` right one position.
     /// A zero is shifted in and the LSB is shifted into the carry bit.
     fn shift_right(&mut self, address: u16) {
-        let lsb = (self.memory[address as usize] & 0x80) != 0;
-        self.memory[address as usize] >>= 1;
+        let lsb = (self.memory.read(address) & 0x80) != 0;
+        self.memory.write(address, self.memory.read(address) >> 1);
         self.set_flag(Flag::Carry, lsb);
-        self.update_zn(self.memory[address as usize]);
+        self.update_zn(self.memory.read(address));
     }
 
     /// Rotates bits at `address` left one position.
     /// A rotation means Carry is shifted into the incoming position and the outgoing bit is shifted into the Carry bit.
     fn rotate_left(&mut self, address: u16) {
         let c = self.is_set(Flag::Carry);
-        self.set_flag(Flag::Carry, self.memory[address as usize] & 0x80 != 0);  // if the MSB is set, set the carry bit
-        self.memory[address as usize] <<= 1;
-        self.memory[address as usize] |= c as u8;
-        self.update_zn(self.memory[address as usize]);
+        self.set_flag(Flag::Carry, self.memory.read(address) & 0x80 != 0);  // if the MSB is set, set the carry bit
+        self.memory.write(address, self.memory.read(address) << 1);
+        self.memory.write(address, self.memory.read(address) | c as u8);
+        self.update_zn(self.memory.read(address));
     }
 
     /// Rotates bits at `address` right one position.
     /// The outgoing bit is shifted into the carry bit, and the original carry bit is shifted into the incoming bit position.
     fn rotate_right(&mut self, address: u16) {
         let c = self.is_set(Flag::Carry);
-        self.set_flag(Flag::Carry, self.memory[address as usize] & 1 != 0); // if the LSB is set, set the carry
-        self.memory[address as usize] >>= 1;
-        self.memory[address as usize] |= if c { 0x80 } else { 0 };
-        self.update_zn(self.memory[address as usize]);
+        self.set_flag(Flag::Carry, self.memory.read(address) & 1 != 0); // if the LSB is set, set the carry
+        self.memory.write(address, self.memory.read(address) >> 1);
+        self.memory.write(address, self.memory.read(address) | if c { 0x80 } else { 0 });
+        self.update_zn(self.memory.read(address));
     }
 
     /// Branches according to data in memory
     fn branch(&mut self, condition: bool) {
         if condition {
-            let offset = self.memory[self.pc as usize] as i8;   // offset is signed
+            let offset = self.memory.read(self.pc) as i8;   // offset is signed
             self.pc = self.pc.overflowing_add(1).0;
             if offset < 0 {
                 self.pc = self.pc.overflowing_sub((offset as i16).abs() as u16).0;
@@ -516,7 +514,7 @@ impl CPU {
         self.push((self.pc & 0xFF) as u8);  // push LSB
         self.push(self.status);
         self.set_flag(Flag::Interrupt, true);
-        let address = (self.memory[IRQ_VECTOR as usize] as u16) | ((self.memory[(IRQ_VECTOR as usize) + 1] as u16) << 8);
+        let address = (self.memory.read(IRQ_VECTOR) as u16) | ((self.memory.read(IRQ_VECTOR + 1) as u16) << 8);
         self.pc = address;
     }
 
@@ -598,9 +596,9 @@ impl CPU {
                     // Test bits
                     // Sets the Z flag as if A and [operand] were ANDed together; sets N and V to bits 7 and 6 of the operand, respecitvely.
                     let address = self.read_address(i.mode);
-                    self.set_flag(Flag::Zero, (self.a & self.memory[address as usize]) != 0);
-                    self.set_flag(Flag::Negative, (self.memory[address as usize] & N_FLAG) != 0);
-                    self.set_flag(Flag::Overflow, (self.memory[address as usize] & V_FLAG) != 0);
+                    self.set_flag(Flag::Zero, (self.a & self.memory.read(address) != 0));
+                    self.set_flag(Flag::Negative, (self.memory.read(address) & N_FLAG) != 0);
+                    self.set_flag(Flag::Overflow, (self.memory.read(address) & V_FLAG) != 0);
                 },
 
                 // Branches
@@ -666,8 +664,8 @@ impl CPU {
                 instruction::Mnemonic::DEC => {
                     // Decrement memory
                     let address = self.read_address(i.mode);
-                    self.memory[address as usize] -= 1;
-                    self.update_zn(self.memory[address as usize]);
+                    self.memory.write(address, self.memory.read(address) - 1);
+                    self.update_zn(self.memory.read(address));
                 },
                 instruction::Mnemonic::EOR => {
                     // XOR with accumulator
@@ -699,8 +697,8 @@ impl CPU {
                 instruction::Mnemonic::INC => {
                     // Increment memory
                     let address = self.read_address(i.mode);
-                    self.memory[address as usize] += 1;
-                    self.update_zn(self.memory[address as usize]);
+                    self.memory.write(address, self.memory.read(address) + 1);
+                    self.update_zn(self.memory.read(address));
                 },
                 instruction::Mnemonic::JMP => {
                     // JMP has two addressing modes
@@ -904,14 +902,14 @@ impl CPU {
     }
 
     pub fn load_vector(&mut self, vector: u16, value: u16) {
-        self.memory[vector as usize] = (value & 0xFF) as u8;
-        self.memory[vector as usize + 1] = (value >> 8) as u8;
+        self.memory.write(vector, (value & 0xFF) as u8);
+        self.memory.write(vector + 1, (value >> 8) as u8);
     }
 
     /// Steps the processor, executing an instruction
     pub fn step(&mut self) {
         // fetch the byte at the address indicated by the pc
-        let instruction = self.memory[self.pc as usize];
+        let instruction = self.memory.read(self.pc);
         self.pc = self.pc.overflowing_add(1).0;   // increment the pc by one during the 'fetch cycle'
         
         // execute that instruction
@@ -949,5 +947,14 @@ impl CPU {
         self.sp = 0xFF;
 
         // todo: additional start routines
+    }
+
+    /// Loads CPU with a program at the given address
+    pub fn load_program(&mut self, address: u16, buf: &[u8; 0x200]) {
+        let mut a = address;
+        for _i in buf.iter() {
+            self.memory.write(a, *_i);
+            a += 1;
+        }
     }
 }

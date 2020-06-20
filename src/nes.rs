@@ -2,16 +2,25 @@
 // Implements the NES functionality, bringing together the CPU, PPU, and APU
 
 use Box;
+use std::time::{Duration, Instant};
+use std::thread::sleep;
 
 use crate::cpu;
 use crate::ppu;
 
 // constants for clock speeds
-const MASTER_CLOCK: u32 = 21_477_272;
-const VBLANK_RATE: u32 = MASTER_CLOCK / 60;    // vlbank happens every 60th of a second (about once every 17 milliseconds)
-const CPU_CLOCK_FACTOR: u8 = 12;    // the CPU clock is 1/12 the master
-const PPU_CLOCK_FACTOR: u8 = 4;     // the PPU clock is 1/4 the master
-const APU_BLOCK_FACTOR: u8 = 24;    // the APU clock is 1/24 the master
+const MASTER_CLOCK_RATE: u32 = 21_477_272;
+const VBLANK_RATE: u32 = MASTER_CLOCK_RATE / 60;    // vlbank happens every 60th of a second (about once every 17 milliseconds)
+
+// our clock factors
+const CPU_CLOCK_FACTOR: u32 = 12;    // the CPU clock is 1/12 the master
+const PPU_CLOCK_FACTOR: u32 = 4;     // the PPU clock is 1/4 the master
+const APU_BLOCK_FACTOR: u32 = 24;    // the APU clock is 1/24 the master
+
+// pre-compute clock rates
+const CPU_CLOCK_RATE: u32 =  MASTER_CLOCK_RATE / CPU_CLOCK_FACTOR;
+const PPU_CLOCK_RATE: u32 = MASTER_CLOCK_RATE / PPU_CLOCK_FACTOR;
+const APU_CLOCK_RATE: u32 = MASTER_CLOCK_RATE / APU_BLOCK_FACTOR;
 
 pub struct NES {
     // processors within the system
@@ -46,6 +55,44 @@ impl NES {
             cpu: cpu,
 
             cycles: 0,
+        }
+    }
+
+    /// Loads a program into memory and executes it.
+    /// The program will be loaded according to the mapper it uses.
+    pub fn run(&mut self) {
+        // todo: mappers
+
+        let mut start_instant = Instant::now();
+        let mut do_update = false;
+
+        while self.cpu.is_running() {
+            // update the time if we need to
+            if do_update {
+                start_instant = Instant::now();
+                do_update = false;
+            }
+            else {
+                // make sure the number of master cycles is lower than the number in a second
+                if self.cycles < MASTER_CLOCK_RATE {
+                    // todo: if it's time for vblank, signal the cpu 
+
+                    if CPU_CLOCK_RATE >= self.cpu.cycle_count() {
+                        self.cpu.step();
+                    }
+                    // todo: update PPU, APU
+
+                    self.cycles += 4;   // update the number of cycles that have passed
+                                        // note we are using 4 because that's the fewest that can pass with one tick;
+                                        // the PPU is the fastest element and runs 1/4 the rate of the master 
+                }
+                else {
+                    println!("Sleeping for duration; cycles passed: {}", self.cycles);
+                    let second = Duration::new(1, 0);
+                    sleep(second - start_instant.elapsed());
+                    do_update = true;
+                }
+            }
         }
     }
 }

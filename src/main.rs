@@ -10,6 +10,7 @@ use std::io::Write;
 pub mod cpu;
 pub mod ppu;
 pub mod nes;
+pub mod mem;
 
 fn main() {
     // Create the CPU object
@@ -19,7 +20,6 @@ fn main() {
 
     // set up our vectors
     const RESET: u16 = 0x0600;
-    const IRQ: u16 = 0x0620;
 
     // get the program
     print!("Enter the filename (located in samples/): ");
@@ -30,11 +30,12 @@ fn main() {
     let mut file = File::open(filename).unwrap();
     
     // load the program into memory
-    file.read(&mut nes_cpu.memory[RESET as usize..]).unwrap();
+    let mut buf = [0u8; 0x200];
+    file.read(&mut buf[0..]).unwrap();
+    nes_cpu.load_program(RESET, &buf);
 
     // update the vectors
     nes_cpu.load_vector(cpu::RESET_VECTOR, RESET);
-    nes_cpu.load_vector(cpu::IRQ_VECTOR, IRQ);
 
     // reset the system
     nes_cpu.reset();
